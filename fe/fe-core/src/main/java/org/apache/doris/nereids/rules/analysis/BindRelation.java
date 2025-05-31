@@ -439,7 +439,7 @@ public class BindRelation extends OneAnalysisRuleFactory {
                     }
                     return new LogicalFileScan(unboundRelation.getRelationId(), (ExternalTable) table,
                         qualifierWithoutTableName, unboundRelation.getTableSample(),
-                        unboundRelation.getTableSnapshot());
+                        unboundRelation.getTableSnapshot(), ImmutableList.of());
                 case PAIMON_EXTERNAL_TABLE:
                 case MAX_COMPUTE_EXTERNAL_TABLE:
                 case TRINO_CONNECTOR_EXTERNAL_TABLE:
