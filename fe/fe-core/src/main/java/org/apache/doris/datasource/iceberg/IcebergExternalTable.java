@@ -28,6 +28,7 @@ import org.apache.doris.common.DdlException;
 import org.apache.doris.datasource.ExternalSchemaCache.SchemaCacheKey;
 import org.apache.doris.datasource.ExternalTable;
 import org.apache.doris.datasource.SchemaCacheValue;
+import org.apache.doris.datasource.mvcc.EmptyMvccSnapshot;
 import org.apache.doris.datasource.mvcc.MvccSnapshot;
 import org.apache.doris.datasource.mvcc.MvccTable;
 import org.apache.doris.datasource.systable.SupportedSysTables;
@@ -249,8 +250,12 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
 
     @Override
     public MvccSnapshot loadSnapshot(Optional<TableSnapshot> tableSnapshot) {
-        return new IcebergMvccSnapshot(IcebergUtils.getIcebergSnapshotCacheValue(
+        if (isTable()) {
+            return new IcebergMvccSnapshot(IcebergUtils.getIcebergSnapshotCacheValue(
                 tableSnapshot, getCatalog(), getDbName(), getName()));
+        } else {
+            return new EmptyMvccSnapshot();
+        }
     }
 
     @Override
