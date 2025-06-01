@@ -46,6 +46,7 @@ import org.apache.doris.nereids.analyzer.UnboundRelation;
 import org.apache.doris.nereids.analyzer.UnboundResultSink;
 import org.apache.doris.nereids.exceptions.AnalysisException;
 import org.apache.doris.nereids.hint.LeadingHint;
+import org.apache.doris.nereids.parser.Dialect;
 import org.apache.doris.nereids.parser.NereidsParser;
 import org.apache.doris.nereids.parser.SqlDialectHelper;
 import org.apache.doris.nereids.pattern.MatchingContext;
@@ -426,11 +427,11 @@ public class BindRelation extends OneAnalysisRuleFactory {
                     IcebergExternalTable icebergExternalTable = (IcebergExternalTable) table;
                     if (Config.enable_query_iceberg_views && icebergExternalTable.isView()) {
                         isView = true;
-                        String hiveCatalog = icebergExternalTable.getCatalog().getName();
-                        String hiveDb = icebergExternalTable.getDatabase().getFullName();
+                        String icebergCatalog = icebergExternalTable.getCatalog().getName();
+                        String icebergDb = icebergExternalTable.getDatabase().getFullName();
                         String ddlSql = icebergExternalTable.getViewText();
                         Plan icebergViewPlan = parseAndAnalyzeExternalView(icebergExternalTable,
-                                hiveCatalog, hiveDb, ddlSql, cascadesContext);
+                                icebergCatalog, icebergDb, ddlSql, cascadesContext);
                         return new LogicalSubQueryAlias<>(qualifiedTableName, icebergViewPlan);
                     }
                     if (icebergExternalTable.isView()) {
@@ -479,14 +480,29 @@ public class BindRelation extends OneAnalysisRuleFactory {
     }
 
     private Plan parseAndAnalyzeExternalView(
-            ExternalTable table, String hiveCatalog, String hiveDb, String ddlSql, CascadesContext cascadesContext) {
+            ExternalTable table, String externalCatalog, String externalDb,
+            String ddlSql, CascadesContext cascadesContext) {
         ConnectContext ctx = cascadesContext.getConnectContext();
         String previousCatalog = ctx.getCurrentCatalog().getName();
         String previousDb = ctx.getDatabase();
+        if (table instanceof IcebergExternalTable) {
+            String icebergViewSqlDialect = ((IcebergExternalTable) table).getSqlDialect();
+            Dialect dialect = Dialect.getByName(ctx.getSessionVariable().getSqlDialect());
+            // Ensure that the dialect defined in the Iceberg view matches the session dialect
+            // when processing the view, to avoid ambiguity during SQL conversion.
+            if (dialect != null && !dialect.getDialectName().equals(icebergViewSqlDialect)) {
+                throw new AnalysisException(
+                    String.format("The currently set SQL dialect is %s,"
+                            +
+                            "but the actual iceberg view SQL dialect is %s.",
+                    dialect.getDialectName(), icebergViewSqlDialect));
+            }
+        }
         String convertedSql = SqlDialectHelper.convertSqlByDialect(ddlSql, ctx.getSessionVariable());
-        // change catalog and db to hive catalog and db, so that we can parse and analyze the view sql in hive context.
-        ctx.changeDefaultCatalog(hiveCatalog);
-        ctx.setDatabase(hiveDb);
+        // change catalog and db to external catalog and db,
+        // so that we can parse and analyze the view sql in external context.
+        ctx.changeDefaultCatalog(externalCatalog);
+        ctx.setDatabase(externalDb);
         try {
             return parseAndAnalyzeView(table, convertedSql, cascadesContext);
         } finally {
