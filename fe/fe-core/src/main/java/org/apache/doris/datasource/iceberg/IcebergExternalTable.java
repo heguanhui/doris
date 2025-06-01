@@ -324,4 +324,27 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
             throw new RuntimeException(e);
         }
     }
+
+    public String getSqlDialect() {
+        try {
+            return catalog.getPreExecutionAuthenticator().execute(() -> {
+                View icebergView = IcebergUtils.getIcebergView(getCatalog(), getRemoteDbName(), getRemoteName());
+                ViewVersion viewVersion = icebergView.currentVersion();
+                if (viewVersion == null) {
+                    throw new RuntimeException(String.format("Cannot get view version for view '%s'", icebergView));
+                }
+                Map<String, String> summary = viewVersion.summary();
+                if (summary == null) {
+                    throw new RuntimeException(String.format("Cannot get summary for view '%s'", icebergView));
+                }
+                String engineName = summary.get("engine-name");
+                if (StringUtils.isEmpty(engineName)) {
+                    throw new RuntimeException(String.format("Cannot get engine-name for view '%s'", icebergView));
+                }
+                return engineName.toLowerCase();
+            });
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
 }
