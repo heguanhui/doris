@@ -177,14 +177,31 @@ public interface ExternalMetadataOps {
      */
     void close();
 
+    /**
+     * load an iceberg view.
+     * @param dbName
+     * @param viewName
+     * @return
+     */
     default View loadView(String dbName, String viewName) {
         throw new UnsupportedOperationException("Load view is not supported.");
     }
 
+    /**
+     * Check if an Iceberg view exists.
+     * @param dbName
+     * @param viewName
+     * @return
+     */
     default boolean viewExists(String dbName, String viewName) {
         throw new UnsupportedOperationException("View is not supported.");
     }
 
+    /**
+     * List all views under a specific database.
+     * @param db
+     * @return
+     */
     default List<String> listViewNames(String db) {
         return Collections.emptyList();
     }
