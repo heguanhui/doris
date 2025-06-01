@@ -467,11 +467,11 @@ public class ExternalTable implements TableIf, Writable, GsonPostProcessable {
         return Objects.hashCode(name, db);
     }
 
-    public boolean isTable() {
+    protected boolean isTable() {
         return true;
     }
 
-    public String getRemoteDbName() {
+    protected String getRemoteDbName() {
         return db.getRemoteName();
     }
 
