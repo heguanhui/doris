@@ -485,19 +485,6 @@ public class BindRelation extends OneAnalysisRuleFactory {
         ConnectContext ctx = cascadesContext.getConnectContext();
         String previousCatalog = ctx.getCurrentCatalog().getName();
         String previousDb = ctx.getDatabase();
-        if (table instanceof IcebergExternalTable) {
-            String icebergViewSqlDialect = ((IcebergExternalTable) table).getSqlDialect();
-            Dialect dialect = Dialect.getByName(ctx.getSessionVariable().getSqlDialect());
-            // Ensure that the dialect defined in the Iceberg view matches the session dialect
-            // when processing the view, to avoid ambiguity during SQL conversion.
-            if (dialect != null && !dialect.getDialectName().equals(icebergViewSqlDialect)) {
-                throw new AnalysisException(
-                    String.format("The currently set SQL dialect is %s,"
-                            +
-                            "but the actual iceberg view SQL dialect is %s.",
-                    dialect.getDialectName(), icebergViewSqlDialect));
-            }
-        }
         String convertedSql = SqlDialectHelper.convertSqlByDialect(ddlSql, ctx.getSessionVariable());
         // change catalog and db to external catalog and db,
         // so that we can parse and analyze the view sql in external context.
