@@ -1306,7 +1306,7 @@ public abstract class ExternalCatalog
     }
 
     /**
-     * Check if an Iceberg view exists.
+     * Check if an external view exists.
      * @param dbName
      * @param viewName
      * @return
