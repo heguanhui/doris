@@ -70,6 +70,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     private boolean isValidRelatedTable = false;
     private boolean isTable;
     private boolean isView;
+    private static final String ENGINE_PROP_NAME = "engine-name";
 
     public IcebergExternalTable(long id, String name, String remoteName, IcebergExternalCatalog catalog,
             IcebergExternalDatabase db) {
@@ -314,7 +315,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
                 if (summary == null) {
                     throw new RuntimeException(String.format("Cannot get summary for view '%s'", icebergView));
                 }
-                String engineName = summary.get("engine-name");
+                String engineName = summary.get(ENGINE_PROP_NAME);
                 if (StringUtils.isEmpty(engineName)) {
                     throw new RuntimeException(String.format("Cannot get engine-name for view '%s'", icebergView));
                 }
@@ -341,7 +342,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
                 if (summary == null) {
                     throw new RuntimeException(String.format("Cannot get summary for view '%s'", icebergView));
                 }
-                String engineName = summary.get("engine-name");
+                String engineName = summary.get(ENGINE_PROP_NAME);
                 if (StringUtils.isEmpty(engineName)) {
                     throw new RuntimeException(String.format("Cannot get engine-name for view '%s'", icebergView));
                 }
