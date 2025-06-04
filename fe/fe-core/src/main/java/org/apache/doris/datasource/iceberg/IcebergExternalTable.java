@@ -75,8 +75,6 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     public IcebergExternalTable(long id, String name, String remoteName, IcebergExternalCatalog catalog,
             IcebergExternalDatabase db) {
         super(id, name, remoteName, catalog, db, TableType.ICEBERG_EXTERNAL_TABLE);
-        isTable = catalog.tableExist(null, getRemoteDbName(), getRemoteName());
-        isView = catalog.viewExists(getRemoteDbName(), getRemoteName());
     }
 
     public String getIcebergCatalogType() {
@@ -87,6 +85,8 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
         super.makeSureInitialized();
         if (!objectCreated) {
             objectCreated = true;
+            isTable = catalog.tableExist(null, getRemoteDbName(), getRemoteName());
+            isView = catalog.viewExists(getRemoteDbName(), getRemoteName());
         }
     }
 
@@ -295,11 +295,13 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
 
     @Override
     public boolean isTable() {
+        makeSureInitialized();
         return isTable;
     }
 
     @Override
     public boolean isView() {
+        makeSureInitialized();
         return isView;
     }
 
