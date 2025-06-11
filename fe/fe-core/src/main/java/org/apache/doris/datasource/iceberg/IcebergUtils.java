@@ -1125,7 +1125,7 @@ public class IcebergUtils {
         return Optional.of(new IcebergSchemaCacheValue(schema, tmpColumns));
     }
 
-    public static List<Column> getConvertedSchema(Schema schema) {
+    private static List<Column> getConvertedSchema(Schema schema) {
         List<Types.NestedField> columns = schema.columns();
         List<Column> tmpSchema = Lists.newArrayListWithCapacity(columns.size());
         for (Types.NestedField field : columns) {
