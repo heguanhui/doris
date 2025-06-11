@@ -85,8 +85,8 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
         super.makeSureInitialized();
         if (!objectCreated) {
             objectCreated = true;
-            isTable = catalog.tableExist(null, getRemoteDbName(), getRemoteName());
-            isView = catalog.viewExists(getRemoteDbName(), getRemoteName());
+            isTable = catalog.tableExist(null, dbName, getRemoteName());
+            isView = catalog.viewExists(dbName, getRemoteName());
         }
     }
 
@@ -98,10 +98,9 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     @Override
     public Optional<SchemaCacheValue> initSchema(SchemaCacheKey key) {
         boolean isView = isView();
-        String remoteDbName = getRemoteDbName();
         String tableName = getRemoteName();
         return IcebergUtils.loadSchemaCacheValue(
-            catalog, remoteDbName, tableName, ((IcebergSchemaCacheKey) key).getSchemaId(), isView);
+            catalog, dbName, tableName, ((IcebergSchemaCacheKey) key).getSchemaId(), isView);
     }
 
     @Override
@@ -308,7 +307,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     public String getViewText() {
         try {
             return catalog.getPreExecutionAuthenticator().execute(() -> {
-                View icebergView = IcebergUtils.getIcebergView(getCatalog(), getRemoteDbName(), getRemoteName());
+                View icebergView = IcebergUtils.getIcebergView(getCatalog(), dbName, getRemoteName());
                 ViewVersion viewVersion = icebergView.currentVersion();
                 if (viewVersion == null) {
                     throw new RuntimeException(String.format("Cannot get view version for view '%s'", icebergView));
@@ -335,7 +334,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     public String getSqlDialect() {
         try {
             return catalog.getPreExecutionAuthenticator().execute(() -> {
-                View icebergView = IcebergUtils.getIcebergView(getCatalog(), getRemoteDbName(), getRemoteName());
+                View icebergView = IcebergUtils.getIcebergView(getCatalog(), dbName, getRemoteName());
                 ViewVersion viewVersion = icebergView.currentVersion();
                 if (viewVersion == null) {
                     throw new RuntimeException(String.format("Cannot get view version for view '%s'", icebergView));

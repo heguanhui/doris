@@ -471,8 +471,4 @@ public class ExternalTable implements TableIf, Writable, GsonPostProcessable {
         return true;
     }
 
-    protected String getRemoteDbName() {
-        return db.getRemoteName();
-    }
-
 }
