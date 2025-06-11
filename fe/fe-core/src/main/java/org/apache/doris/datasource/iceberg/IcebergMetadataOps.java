@@ -131,6 +131,10 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
             return preExecutionAuthenticator.execute(() -> {
                 List<TableIdentifier> tableIdentifiers = catalog.listTables(getNamespace(dbName));
                 List<String> views;
+                // Our original intention was simply to clearly define the responsibilities of ViewCatalog and Catalog.
+                // IcebergMetadataOps handles listTableNames and listViewNames separately.
+                // listTableNames should only focus on the table type,
+                // but in reality, Iceberg's return includes views. Therefore, we added a filter to exclude views.
                 if (catalog instanceof ViewCatalog) {
                     views = ((ViewCatalog) catalog).listViews(getNamespace(dbName))
                         .stream().map(TableIdentifier::name).collect(Collectors.toList());
