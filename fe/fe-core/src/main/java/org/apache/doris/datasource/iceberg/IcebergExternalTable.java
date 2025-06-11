@@ -68,7 +68,6 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     private Table table;
     private boolean isValidRelatedTableCached = false;
     private boolean isValidRelatedTable = false;
-    private boolean isTable;
     private boolean isView;
     private static final String ENGINE_PROP_NAME = "engine-name";
 
@@ -85,7 +84,6 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
         super.makeSureInitialized();
         if (!objectCreated) {
             objectCreated = true;
-            isTable = catalog.tableExist(null, dbName, getRemoteName());
             isView = catalog.viewExists(dbName, getRemoteName());
         }
     }
@@ -254,11 +252,11 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
 
     @Override
     public MvccSnapshot loadSnapshot(Optional<TableSnapshot> tableSnapshot) {
-        if (isTable()) {
+        if (isView()) {
+            return new EmptyMvccSnapshot();
+        } else {
             return new IcebergMvccSnapshot(IcebergUtils.getIcebergSnapshotCacheValue(
                 tableSnapshot, getCatalog(), getDbName(), getName()));
-        } else {
-            return new EmptyMvccSnapshot();
         }
     }
 
@@ -290,12 +288,6 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     public List<SysTable> getSupportedSysTables() {
         makeSureInitialized();
         return SupportedSysTables.ICEBERG_SUPPORTED_SYS_TABLES;
-    }
-
-    @Override
-    public boolean isTable() {
-        makeSureInitialized();
-        return isTable;
     }
 
     @Override

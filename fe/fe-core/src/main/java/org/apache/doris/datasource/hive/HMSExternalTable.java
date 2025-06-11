@@ -1190,9 +1190,4 @@ public class HMSExternalTable extends ExternalTable implements MTMVRelatedTableI
         }
     }
 
-    @Override
-    public boolean isTable() {
-        return catalog.tableExist(null, dbName, name);
-    }
-
 }
