@@ -345,4 +345,37 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
             throw new RuntimeException(e);
         }
     }
+
+    private View getIcebergView() {
+        return IcebergUtils.getIcebergView(getCatalog(), getRemoteDbName(), getRemoteName());
+    }
+
+    /**
+     * get location of an iceberg table or view
+     * @return
+     */
+    public String location() {
+        if (isView()) {
+            View icebergView = getIcebergView();
+            return icebergView.location();
+        } else {
+            Table icebergTable = getIcebergTable();
+            return icebergTable.location();
+        }
+    }
+
+    /**
+     * get properties of an iceberg table or view
+     * @return
+     */
+    public Map<String, String> properties() {
+        if (isView()) {
+            View icebergView = getIcebergView();
+            return icebergView.properties();
+        } else {
+            Table icebergTable = getIcebergTable();
+            return icebergTable.properties();
+        }
+    }
+
 }
