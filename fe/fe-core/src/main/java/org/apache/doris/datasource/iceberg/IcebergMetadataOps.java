@@ -329,7 +329,11 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
     public void dropTableImpl(String dbName, String tableName, boolean ifExists) throws DdlException {
         try {
             preExecutionAuthenticator.execute(() -> {
-                performDropTable(dbName, tableName, ifExists);
+                if (getExternalCatalog().getMetadataOps().viewExists(dbName, tableName)) {
+                    performDropView(dbName, tableName, ifExists);
+                } else {
+                    performDropTable(dbName, tableName, ifExists);
+                }
                 return null;
             });
         } catch (Exception e) {
@@ -449,4 +453,31 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
     private Namespace getNamespace() {
         return externalCatalogName.map(Namespace::of).orElseGet(() -> Namespace.empty());
     }
+
+    private void performDropView(String dbName, String viewName, boolean ifExists) throws DdlException {
+        if (!(catalog instanceof ViewCatalog)) {
+            throw new DdlException("Drop Iceberg view is not supported with not view catalog.");
+        }
+        ExternalDatabase<?> db = dorisCatalog.getDbNullable(dbName);
+        if (db == null) {
+            if (ifExists) {
+                LOG.info("database [{}] does not exist when drop view[{}]", dbName, viewName);
+                return;
+            } else {
+                ErrorReport.reportDdlException(ErrorCode.ERR_BAD_DB_ERROR, dbName);
+            }
+        }
+        ViewCatalog viewCatalog = (ViewCatalog) catalog;
+        if (!viewExists(dbName, viewName)) {
+            if (ifExists) {
+                LOG.info("drop view[{}] which does not exist", viewName);
+                return;
+            } else {
+                ErrorReport.reportDdlException(ErrorCode.ERR_UNKNOWN_TABLE, viewName, dbName);
+            }
+        }
+        viewCatalog.dropView(getTableIdentifier(dbName, viewName));
+        db.setUnInitialized(true);
+    }
+
 }
