@@ -1136,4 +1136,10 @@ public class IcebergUtils {
         return tmpSchema;
     }
 
+    public static String showCreateView(IcebergExternalTable icebergExternalTable) {
+        return String.format("CREATE VIEW `%s` AS ", icebergExternalTable.getName())
+            +
+            icebergExternalTable.getViewText();
+    }
+
 }
