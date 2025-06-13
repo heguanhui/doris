@@ -44,53 +44,154 @@ suite("test_iceberg_view_query_p0", "p0,external,iceberg,external_docker,externa
         sql """set enable_fallback_to_original_planner=false;"""
 
         // run all suites
-        sql """select * from view_with_partitioned_table"""
-        sql """select * from view_with_unpartitioned_table"""
-        sql """select * from view_with_partitioned_column"""
-        sql """select count(*) from view_with_partitioned_table"""
-        sql """select count(*) from view_with_unpartitioned_table"""
-        sql """select count(*) from view_with_partitioned_column"""
-        sql """select col1,col2,col3,col4 from view_with_partitioned_table"""
-        sql """select col5 from view_with_partitioned_table"""
+        def q01 = {
+            order_qt_q01 """select * from v_with_partitioned_table order by col1"""
+            order_qt_q02 """select * from v_with_unpartitioned_table order by col1"""
+            order_qt_q03 """select * from v_with_partitioned_column order by col5"""
+        }
 
-        sql """explain verbose select * from view_with_partitioned_table"""
-        sql """explain verbose select * from view_with_unpartitioned_table"""
-        sql """explain verbose select * from view_with_partitioned_column"""
-        sql """explain verbose select count(*) from view_with_partitioned_table"""
-        sql """explain verbose select count(*) from view_with_unpartitioned_table"""
-        sql """explain verbose select count(*) from view_with_partitioned_column"""
-        sql """explain verbose select col1,col2,col3,col4 from view_with_partitioned_table"""
-        sql """explain verbose select col5 from view_with_partitioned_table"""
+        def q02 = {
+            order_qt_q01 """select count(*) from v_with_partitioned_table"""
+            order_qt_q02 """select count(*) from v_with_unpartitioned_table"""
+            order_qt_q03 """select count(*) from v_with_partitioned_column"""
+        }
 
-        sql """show create table view_with_partitioned_table"""
-        sql """show create table view_with_unpartitioned_table"""
-        sql """show create table view_with_partitioned_column"""
-        sql """show create view view_with_partitioned_table"""
-        sql """show create view view_with_unpartitioned_table"""
-        sql """show create view view_with_partitioned_column"""
+        def q03 = {
+            order_qt_q01 """select col1,col2,col3,col4 from v_with_partitioned_table order by col1"""
+            order_qt_q02 """select col5 from v_with_partitioned_table order by col5"""
+        }
 
-        sql """describe view_with_partitioned_table"""
-        sql """describe view_with_unpartitioned_table"""
-        sql """describe view_with_partitioned_column"""
+        def q04 = {
+            order_qt_q01 """describe v_with_partitioned_table"""
+            order_qt_q02 """describe v_with_unpartitioned_table"""
+            order_qt_q03 """describe v_with_partitioned_column"""
+        }
 
-        sql """select * from view_with_partitioned_table FOR TIME AS OF '2025-06-11 20:17:01' order by col1 limit 10"""
-        sql """select * from view_with_partitioned_table FOR VERSION AS OF 3106988132043095748 order by col1 limit 10"""
-        sql """select count(*) from view_with_partitioned_table FOR TIME AS OF '2025-06-11 20:17:01'""" // 5
-        sql """select count(*) from view_with_partitioned_table FOR VERSION AS OF 3106988132043095748""" // 5
+        q01()
+        q02()
+        q03()
+        q04()
 
-        sql """select * from view_with_unpartitioned_table FOR TIME AS OF '2025-06-11 20:17:01' order by col1 limit 10"""
-        sql """select * from view_with_unpartitioned_table FOR VERSION AS OF 3106988132043095748 order by col1 limit 10"""
-        sql """select count(*) from view_with_unpartitioned_table FOR TIME AS OF '2025-06-11 20:17:01'""" // 5
-        sql """select count(*) from view_with_unpartitioned_table FOR VERSION AS OF 3106988132043095748""" // 5
+        def result1 = sql """explain verbose select * from v_with_partitioned_table"""
+        assertTrue(result1.contains('t_partitioned_table'))
+        def result2 = sql """explain verbose select * from v_with_unpartitioned_table"""
+        assertTrue(result2.contains('v_with_unpartitioned_table'))
+        def result3 = sql """explain verbose select * from v_with_partitioned_column"""
+        assertTrue(result3.contains('t_partitioned_table'))
 
-        sql """select * from view_with_partitioned_column FOR TIME AS OF '2025-06-11 20:17:01' order by col5 limit 10"""
-        sql """select * from view_with_partitioned_column FOR VERSION AS OF 3106988132043095748 order by col5 limit 10"""
-        sql """select count(*) from view_with_partitioned_column FOR TIME AS OF '2025-06-11 20:17:01'""" // 5
-        sql """select count(*) from view_with_partitioned_column FOR VERSION AS OF 3106988132043095748""" // 5
+        def result4 = sql """explain verbose select count(*) from v_with_partitioned_table"""
+        assertTrue(result4.contains('t_partitioned_table'))
+        def result5 = sql """explain verbose select count(*) from v_with_unpartitioned_table"""
+        assertTrue(result5.contains('t_unpartitioned_table'))
+        def result6 = sql """explain verbose select count(*) from v_with_partitioned_column"""
+        assertTrue(result6.contains('t_partitioned_table'))
 
-        sql """drop view view_with_partitioned_table"""
-        sql """drop view view_with_unpartitioned_table"""
-        sql """drop view view_with_partitioned_column"""
+        def result7 = sql """explain verbose select col1,col2,col3,col4 from v_with_partitioned_table"""
+        assertTrue(result7.contains('t_partitioned_table'))
+        def result8 = sql """explain verbose select col5 from v_with_partitioned_table"""
+        assertTrue(result8.contains('t_partitioned_table'))
+
+        def result9 = sql """show create table v_with_partitioned_table"""
+        assertTrue(result9.contains('v_with_partitioned_table'))
+        def result10 = sql """show create table v_with_unpartitioned_table"""
+        assertTrue(result10.contains('v_with_unpartitioned_table'))
+        def result11 = sql """show create table v_with_partitioned_column"""
+        assertTrue(result11.contains('v_with_partitioned_column'))
+
+        def result12 = sql """show create view v_with_partitioned_table"""
+        assertTrue(result12.contains('v_with_partitioned_table'))
+        def result13 = sql """show create view v_with_unpartitioned_table"""
+        assertTrue(result13.contains('v_with_unpartitioned_table'))
+        def result14 = sql """show create view v_with_partitioned_column"""
+        assertTrue(result14.contains('v_with_partitioned_column'))
+
+        try {
+            sql """select * from v_with_partitioned_table FOR TIME AS OF '2025-06-11 20:17:01' order by col1 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select * from v_with_partitioned_table FOR VERSION AS OF 5497706844625725452 order by col1 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_partitioned_table FOR TIME AS OF '2025-06-11 20:17:01'"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_partitioned_table FOR VERSION AS OF 5497706844625725452"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+
+        try {
+            sql """select * from v_with_unpartitioned_table FOR TIME AS OF '2025-06-11 20:17:01' order by col1 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select * from v_with_unpartitioned_table FOR VERSION AS OF 5497706844625725452 order by col1 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_unpartitioned_table FOR TIME AS OF '2025-06-11 20:17:01'"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_unpartitioned_table FOR VERSION AS OF 5497706844625725452"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+
+        try {
+            sql """select * from v_with_partitioned_column FOR TIME AS OF '2025-06-11 20:17:01' order by col5 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select * from v_with_partitioned_column FOR VERSION AS OF 5497706844625725452 order by col5 limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_partitioned_column FOR TIME AS OF '2025-06-11 20:17:01'"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_partitioned_column FOR VERSION AS OF 5497706844625725452"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+
+        try {
+            sql """select * from v_with_joint_table FOR TIME AS OF '2025-06-11 20:17:01' order by sale_date limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select * from v_with_joint_table FOR VERSION AS OF 5497706844625725452 order by sale_date limit 10"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_joint_table FOR TIME AS OF '2025-06-11 20:17:01'"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+        try {
+            sql """select count(*) from v_with_joint_table FOR VERSION AS OF 5497706844625725452"""
+        } catch (Exception e) {
+            assertTrue(e.getMessage().contains("iceberg view not supported with snapshot time/version travel"), e.getMessage())
+        }
+
+        sql """drop view v_with_partitioned_table"""
+        sql """drop view v_with_unpartitioned_table"""
+        sql """drop view v_with_partitioned_column"""
 
         sql """drop catalog if exists ${iceberg_catalog_name}"""
     } finally {
