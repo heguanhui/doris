@@ -87,6 +87,11 @@ public class IcebergMetadataCache {
         if (catalog == null) {
             throw new UserException("The specified catalog does not exist:" + params.getCatalog());
         }
+        String database = params.getDatabase();
+        String table = params.getTable();
+        if (((ExternalCatalog) catalog).viewExists(database, table)) {
+            throw new UserException("Iceberg view unsupported with snapshot");
+        }
         IcebergMetadataCacheKey key =
                 IcebergMetadataCacheKey.of(catalog, params.getDatabase(), params.getTable());
         return snapshotListCache.get(key);
