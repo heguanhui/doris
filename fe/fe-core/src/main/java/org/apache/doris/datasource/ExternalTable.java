@@ -466,4 +466,8 @@ public class ExternalTable implements TableIf, Writable, GsonPostProcessable {
     public int hashCode() {
         return Objects.hashCode(name, db);
     }
+
+    public boolean isTable() {
+        return true;
+    }
 }

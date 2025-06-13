@@ -205,6 +205,7 @@ import org.apache.doris.datasource.hive.HiveMetaStoreClientHelper;
 import org.apache.doris.datasource.iceberg.IcebergExternalCatalog;
 import org.apache.doris.datasource.iceberg.IcebergExternalDatabase;
 import org.apache.doris.datasource.iceberg.IcebergExternalTable;
+import org.apache.doris.datasource.iceberg.IcebergUtils;
 import org.apache.doris.datasource.maxcompute.MaxComputeExternalCatalog;
 import org.apache.doris.job.manager.JobManager;
 import org.apache.doris.load.DeleteHandler;
@@ -1181,6 +1182,12 @@ public class ShowExecutor {
             if (table.getType() == TableType.HMS_EXTERNAL_TABLE) {
                 rows.add(Arrays.asList(table.getName(),
                         HiveMetaStoreClientHelper.showCreateTable((HMSExternalTable) table)));
+                resultSet = new ShowResultSet(showStmt.getMetaData(), rows);
+                return;
+            }
+            if ((table.getType() == TableType.ICEBERG_EXTERNAL_TABLE) && (((IcebergExternalTable) table).isTable())) {
+                rows.add(Arrays.asList(table.getName(),
+                        IcebergUtils.showCreateTable((IcebergExternalTable) table)));
                 resultSet = new ShowResultSet(showStmt.getMetaData(), rows);
                 return;
             }
@@ -3144,10 +3151,10 @@ public class ShowExecutor {
                 row.add(analysisInfo.scheduleType.toString());
                 LocalDateTime startTime =
                         LocalDateTime.ofInstant(Instant.ofEpochMilli(analysisInfo.startTime),
-                                java.time.ZoneId.systemDefault());
+                                ZoneId.systemDefault());
                 LocalDateTime endTime =
                         LocalDateTime.ofInstant(Instant.ofEpochMilli(analysisInfo.endTime),
-                                java.time.ZoneId.systemDefault());
+                                ZoneId.systemDefault());
                 row.add(startTime.format(formatter));
                 row.add(endTime.format(formatter));
                 row.add(analysisInfo.priority.name());

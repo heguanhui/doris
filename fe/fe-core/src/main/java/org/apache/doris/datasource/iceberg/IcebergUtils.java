@@ -71,35 +71,26 @@ import com.google.common.collect.Maps;
 import com.google.common.collect.Range;
 import com.google.common.collect.Sets;
 import org.apache.commons.lang3.exception.ExceptionUtils;
+import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.FileFormat;
-import org.apache.iceberg.FileScanTask;
-import org.apache.iceberg.ManifestFile;
-import org.apache.iceberg.MetadataTableType;
-import org.apache.iceberg.MetadataTableUtils;
-import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
-import org.apache.iceberg.PartitionsTable;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
-import org.apache.iceberg.StructLike;
 import org.apache.iceberg.Table;
+import org.apache.iceberg.TableMetadata;
+import org.apache.iceberg.TableOperations;
 import org.apache.iceberg.TableProperties;
 import org.apache.iceberg.expressions.And;
 import org.apache.iceberg.expressions.Expression;
 import org.apache.iceberg.expressions.Expressions;
-import org.apache.iceberg.expressions.ManifestEvaluator;
 import org.apache.iceberg.expressions.Not;
 import org.apache.iceberg.expressions.Or;
-import org.apache.iceberg.expressions.Projections;
 import org.apache.iceberg.expressions.Unbound;
 import org.apache.iceberg.hive.HiveCatalog;
-import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Type.TypeID;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.LocationUtil;
-import org.apache.iceberg.util.SnapshotUtil;
-import org.apache.iceberg.util.StructProjection;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -112,6 +103,7 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -1107,4 +1099,54 @@ public class IcebergUtils {
             return IcebergUtils.getIcebergSnapshotCacheValue(Optional.empty(), catalog, dbName, tbName);
         }
     }
+
+    public static String showCreateTable(IcebergExternalTable icebergExternalTable) {
+        StringBuilder output = new StringBuilder();
+        output.append(String.format("CREATE TABLE `%s`(\n", icebergExternalTable.getName()));
+        Table icebergTable = icebergExternalTable.getIcebergTable();
+        TableOperations tableOperations = ((BaseTable) icebergTable).operations();
+        TableMetadata tableMetadata = tableOperations.current();
+        Map<String, String> tblProperties = tableMetadata.properties();
+        Iterator<Types.NestedField> fields = icebergTable.schema().columns().iterator();
+        while (fields.hasNext()) {
+            Types.NestedField field = fields.next();
+            output.append(String.format("  `%s` %s", field.name(), field.type()));
+            if (field.doc() != null) {
+                output.append(String.format(" COMMENT '%s'", field.doc()));
+            }
+            if (fields.hasNext()) {
+                output.append(",\n");
+            }
+        }
+        output.append(")\n");
+        PartitionSpec partitionSpec = icebergTable.spec();
+        if (partitionSpec.isPartitioned()) {
+            output.append("PARTITIONED BY (\n")
+                .append(partitionSpec.fields().stream().map(
+                        partition ->
+                            String.format(" `%s`", partition.name()))
+                    .collect(Collectors.joining(",\n")))
+                    .append(")\n");
+        }
+        output.append("USING iceberg").append("\n");
+        output.append("LOCATION ")
+                .append(String.format("'%s'\n", icebergTable.location()));
+        if (tblProperties != null && !tblProperties.isEmpty()) {
+            output.append("TBLPROPERTIES (\n");
+            Map<String, String> parameters = Maps.newHashMap();
+            // Copy the parameters to a new Map to keep them unchanged.
+            parameters.putAll(tblProperties);
+            Iterator<Map.Entry<String, String>> params = parameters.entrySet().iterator();
+            while (params.hasNext()) {
+                Map.Entry<String, String> param = params.next();
+                output.append(String.format("  '%s'='%s'", param.getKey(), param.getValue()));
+                if (params.hasNext()) {
+                    output.append(",\n");
+                }
+            }
+            output.append(")");
+        }
+        return output.toString();
+    }
+
 }

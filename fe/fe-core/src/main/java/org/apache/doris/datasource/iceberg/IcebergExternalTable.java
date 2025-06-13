@@ -63,6 +63,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     private Table table;
     private boolean isValidRelatedTableCached = false;
     private boolean isValidRelatedTable = false;
+    private boolean isTable;
 
     public IcebergExternalTable(long id, String name, String remoteName, IcebergExternalCatalog catalog,
             IcebergExternalDatabase db) {
@@ -76,6 +77,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     protected synchronized void makeSureInitialized() {
         super.makeSureInitialized();
         if (!objectCreated) {
+            isTable = catalog.tableExist(null, dbName, getRemoteName());
             objectCreated = true;
         }
     }
@@ -273,5 +275,11 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     public List<SysTable> getSupportedSysTables() {
         makeSureInitialized();
         return SupportedSysTables.ICEBERG_SUPPORTED_SYS_TABLES;
+    }
+
+    @Override
+    public boolean isTable() {
+        makeSureInitialized();
+        return isTable;
     }
 }
