@@ -347,7 +347,7 @@ public class IcebergExternalTable extends ExternalTable implements MTMVRelatedTa
     }
 
     public View getIcebergView() {
-        return IcebergUtils.getIcebergView(getCatalog(), getRemoteDbName(), getRemoteName());
+        return IcebergUtils.getIcebergView(getCatalog(), dbName, getRemoteName());
     }
 
     /**
