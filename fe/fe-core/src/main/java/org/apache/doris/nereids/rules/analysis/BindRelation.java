@@ -17,6 +17,7 @@
 
 package org.apache.doris.nereids.rules.analysis;
 
+import org.apache.doris.analysis.TableSnapshot;
 import org.apache.doris.catalog.AggStateType;
 import org.apache.doris.catalog.AggregateType;
 import org.apache.doris.catalog.Column;
@@ -425,6 +426,15 @@ public class BindRelation extends OneAnalysisRuleFactory {
                 case ICEBERG_EXTERNAL_TABLE:
                     IcebergExternalTable icebergExternalTable = (IcebergExternalTable) table;
                     if (Config.enable_query_iceberg_views && icebergExternalTable.isView()) {
+                        Optional<TableSnapshot> tableSnapshot = unboundRelation.getTableSnapshot();
+                        if (tableSnapshot.isPresent()) {
+                            // iceberg view not supported with snapshot time/version travel
+                            // note that enable_fallback_to_original_planner should be set with false
+                            // or else this exception will not be thrown
+                            // because legacy planner will retry and thrown other exception
+                            throw new UnsupportedOperationException(
+                                "iceberg view not supported with snapshot time/version travel");
+                        }
                         isView = true;
                         String icebergCatalog = icebergExternalTable.getCatalog().getName();
                         String icebergDb = icebergExternalTable.getDatabase().getFullName();

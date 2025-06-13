@@ -46,6 +46,10 @@ public class IcebergApiSource implements IcebergSource {
         // Views should not reach this point.
         // By adding this validation, we aim to ensure that if a view query does end up here, it indicates a bug.
         // This helps us identify issues promptly.
+
+        // when use legacy planner, query an iceberg view will enter this
+        // we should set enable_fallback_to_original_planner=false
+        // so that it will throw exception by first planner
         if (table.isView()) {
             throw new UnsupportedOperationException("IcebergApiSource does not support view");
         }
