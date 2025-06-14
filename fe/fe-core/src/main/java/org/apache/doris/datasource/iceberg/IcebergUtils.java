@@ -74,8 +74,13 @@ import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.iceberg.BaseTable;
 import org.apache.iceberg.CatalogProperties;
 import org.apache.iceberg.FileFormat;
+import org.apache.iceberg.FileScanTask;
 import org.apache.iceberg.ManifestFile;
+import org.apache.iceberg.MetadataTableType;
+import org.apache.iceberg.MetadataTableUtils;
+import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
+import org.apache.iceberg.PartitionsTable;
 import org.apache.iceberg.Schema;
 import org.apache.iceberg.Snapshot;
 import org.apache.iceberg.StructLike;
@@ -89,12 +94,15 @@ import org.apache.iceberg.expressions.Expressions;
 import org.apache.iceberg.expressions.ManifestEvaluator;
 import org.apache.iceberg.expressions.Not;
 import org.apache.iceberg.expressions.Or;
+import org.apache.iceberg.expressions.Projections;
 import org.apache.iceberg.expressions.Unbound;
 import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.iceberg.io.CloseableIterable;
 import org.apache.iceberg.types.Type.TypeID;
 import org.apache.iceberg.types.Types;
 import org.apache.iceberg.util.LocationUtil;
+import org.apache.iceberg.util.SnapshotUtil;
+import org.apache.iceberg.util.StructProjection;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 
@@ -591,22 +599,22 @@ public class IcebergUtils {
     }
 
 
-    public static org.apache.iceberg.Table getIcebergTable(ExternalCatalog catalog, String dbName, String tblName) {
+    public static Table getIcebergTable(ExternalCatalog catalog, String dbName, String tblName) {
         return getIcebergTableInternal(catalog, dbName, tblName, false);
     }
 
-    public static org.apache.iceberg.Table getAndCloneTable(ExternalCatalog catalog, SimpleTableInfo tableInfo) {
+    public static Table getAndCloneTable(ExternalCatalog catalog, SimpleTableInfo tableInfo) {
         return getIcebergTableInternal(catalog, tableInfo.getDbName(), tableInfo.getTbName(), true);
     }
 
-    public static org.apache.iceberg.Table getRemoteTable(ExternalCatalog catalog, SimpleTableInfo tableInfo) {
+    public static Table getRemoteTable(ExternalCatalog catalog, SimpleTableInfo tableInfo) {
         return Env.getCurrentEnv()
                 .getExtMetaCacheMgr()
                 .getIcebergMetadataCache()
                 .getIcebergTable(catalog, tableInfo.getDbName(), tableInfo.getTbName());
     }
 
-    private static org.apache.iceberg.Table getIcebergTableInternal(ExternalCatalog catalog, String dbName,
+    private static Table getIcebergTableInternal(ExternalCatalog catalog, String dbName,
             String tblName,
             boolean isClone) {
         IcebergMetadataCache metadataCache = Env.getCurrentEnv()
@@ -622,7 +630,7 @@ public class IcebergUtils {
     public static List<Column> getSchema(ExternalCatalog catalog, String dbName, String name, long schemaId) {
         try {
             return catalog.getPreExecutionAuthenticator().execute(() -> {
-                org.apache.iceberg.Table icebergTable = getIcebergTable(catalog, dbName, name);
+                Table icebergTable = getIcebergTable(catalog, dbName, name);
                 Schema schema;
                 if (schemaId == NEWEST_SCHEMA_ID || icebergTable.currentSnapshot() == null) {
                     schema = icebergTable.schema();
@@ -732,7 +740,7 @@ public class IcebergUtils {
     }
 
     public static HiveCatalog createIcebergHiveCatalog(ExternalCatalog externalCatalog, String name) {
-        HiveCatalog hiveCatalog = new org.apache.iceberg.hive.HiveCatalog();
+        HiveCatalog hiveCatalog = new HiveCatalog();
         hiveCatalog.setConf(externalCatalog.getConfiguration());
 
         Map<String, String> catalogProperties = externalCatalog.getProperties();
