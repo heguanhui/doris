@@ -338,7 +338,6 @@ public class HudiScanNode extends HiveScanNode {
                 incrementalRelation.getEndTs())).collect(Collectors.toList());
     }
 
-
     private void getPartitionSplits(HivePartition partition, List<Split> splits) throws IOException {
 
         String partitionName;
