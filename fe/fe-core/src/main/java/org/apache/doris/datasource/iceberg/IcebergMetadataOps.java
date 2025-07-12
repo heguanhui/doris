@@ -17,7 +17,9 @@
 
 package org.apache.doris.datasource.iceberg;
 
+import org.apache.doris.analysis.AlterViewStmt;
 import org.apache.doris.analysis.CreateTableStmt;
+import org.apache.doris.analysis.CreateViewStmt;
 import org.apache.doris.catalog.Column;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.StructField;
@@ -591,6 +593,74 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
         }
         ViewCatalog viewCatalog = (ViewCatalog) catalog;
         viewCatalog.dropView(getTableIdentifier(remoteDbName, remoteViewName));
+    }
+
+    @Override
+    public void createView(CreateViewStmt createViewStmt) throws DdlException {
+        if (!(catalog instanceof ViewCatalog)) {
+            throw new DdlException("Create Iceberg view is not supported with not view catalog.");
+        }
+        ViewCatalog viewCatalog = (ViewCatalog) catalog;
+        TableIdentifier tableIdentifier = getTableIdentifier(createViewStmt.getDbName(), createViewStmt.getTable());
+        boolean replace = createViewStmt.isSetOrReplace();
+        String sqlDialect = "doris";
+        String viewSql = createViewStmt.getInlineViewDef();
+        performCreateView(viewCatalog, tableIdentifier, sqlDialect, viewSql, replace);
+    }
+
+    private void performCreateView(ViewCatalog viewCatalog, TableIdentifier tableIdentifier,
+            String sqlDialect, String viewSql, boolean replace) throws DdlException {
+        try {
+            preExecutionAuthenticator.execute(() -> {
+                if (replace) {
+                    viewCatalog.buildView(tableIdentifier)
+                            .withQuery(sqlDialect, viewSql)
+                            .replace();
+                } else {
+                    viewCatalog.buildView(tableIdentifier)
+                            .withQuery(sqlDialect, viewSql)
+                            .create();
+                }
+            });
+        } catch (Exception e) {
+            throw new DdlException(e.getMessage());
+        }
+    }
+
+    @Override
+    public void alterView(AlterViewStmt alterViewStmt) throws DdlException {
+        if (!(catalog instanceof ViewCatalog)) {
+            throw new DdlException("Create Iceberg view is not supported with not view catalog.");
+        }
+        ViewCatalog viewCatalog = (ViewCatalog) catalog;
+        String dbName = alterViewStmt.getDbName();
+        String viewName = alterViewStmt.getTable();
+        boolean viewExists = viewExists(dbName, viewName);
+        if (!viewExists) {
+            throw new DdlException(String.format("Iceberg view %s.%s.%s does not exist.",
+                    catalog.name(), dbName, viewName));
+        }
+        dropView(dbName, viewName);
+        String viewSql = alterViewStmt.getInlineViewDef();
+        TableIdentifier tableIdentifier = getTableIdentifier(dbName, viewName);
+        String sqlDialect = "doris";
+        performCreateView(viewCatalog, tableIdentifier, sqlDialect, viewSql, false);
+    }
+
+    @Override
+    public void dropView(String dbName, String viewName) throws DdlException {
+        try {
+            preExecutionAuthenticator.execute(() -> {
+                if (!getExternalCatalog().getMetadataOps().viewExists(dbName, viewName)) {
+                    throw new DdlException("iceberg view does not exist");
+                }
+                performDropView(dbName, viewName);
+                return null;
+            });
+        } catch (Exception e) {
+            throw new DdlException(
+                    "Failed to drop view: " + viewName + ", error message is:" + e.getMessage(), e);
+        }
     }
 }
 

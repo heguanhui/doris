@@ -128,6 +128,7 @@ import org.apache.doris.datasource.es.EsExternalCatalog;
 import org.apache.doris.datasource.es.EsRepository;
 import org.apache.doris.datasource.hive.HiveTransactionMgr;
 import org.apache.doris.datasource.hive.event.MetastoreEventsProcessor;
+import org.apache.doris.datasource.iceberg.IcebergExternalCatalog;
 import org.apache.doris.datasource.iceberg.IcebergExternalTable;
 import org.apache.doris.deploy.DeployManager;
 import org.apache.doris.deploy.impl.AmbariDeployManager;
@@ -4961,6 +4962,16 @@ public class Env {
      * used for handling AlterViewStmt (the ALTER VIEW command).
      */
     public void alterView(AlterViewStmt stmt) throws UserException {
+        CatalogIf currentCatalog = Env.getCurrentEnv().getCurrentCatalog();
+        if (currentCatalog instanceof IcebergExternalCatalog) {
+            if (Config.enable_iceberg_view_ddl) {
+                IcebergExternalCatalog icebergExternalCatalog = (IcebergExternalCatalog) currentCatalog;
+                icebergExternalCatalog.alterView(stmt);
+                return;
+            } else {
+                throw new DdlException("iceberg view ddl is disabled.");
+            }
+        }
         this.alter.processAlterView(stmt, ConnectContext.get());
     }
 
@@ -5891,6 +5902,16 @@ public class Env {
     }
 
     public void createView(CreateViewStmt stmt) throws DdlException {
+        CatalogIf currentCatalog = Env.getCurrentEnv().getCurrentCatalog();
+        if (currentCatalog instanceof IcebergExternalCatalog) {
+            if (Config.enable_iceberg_view_ddl) {
+                IcebergExternalCatalog icebergExternalCatalog = (IcebergExternalCatalog) currentCatalog;
+                icebergExternalCatalog.createView(stmt);
+                return;
+            } else {
+                throw new DdlException("iceberg view ddl is disabled.");
+            }
+        }
         String dbName = stmt.getDbName();
         String tableName = stmt.getTable();
 
@@ -5992,7 +6013,7 @@ public class Env {
         checksum ^= size;
         dos.writeInt(size);
 
-        for (Map.Entry<String, List<FsBroker>> entry : addressListMap.entrySet()) {
+        for (Entry<String, List<FsBroker>> entry : addressListMap.entrySet()) {
             Text.writeString(dos, entry.getKey());
             final List<FsBroker> addrs = entry.getValue();
             size = addrs.size();
@@ -6181,7 +6202,7 @@ public class Env {
         Map<String, String> configs = stmt.getConfigs();
         Preconditions.checkState(configs.size() == 1);
 
-        for (Map.Entry<String, String> entry : configs.entrySet()) {
+        for (Entry<String, String> entry : configs.entrySet()) {
             try {
                 setMutableConfigWithCallback(entry.getKey(), entry.getValue());
             } catch (ConfigException e) {
@@ -6210,7 +6231,7 @@ public class Env {
         Map<String, String> configs = command.getConfigs();
         Preconditions.checkState(configs.size() == 1);
 
-        for (Map.Entry<String, String> entry : configs.entrySet()) {
+        for (Entry<String, String> entry : configs.entrySet()) {
             try {
                 setMutableConfigWithCallback(entry.getKey(), entry.getValue());
             } catch (ConfigException e) {

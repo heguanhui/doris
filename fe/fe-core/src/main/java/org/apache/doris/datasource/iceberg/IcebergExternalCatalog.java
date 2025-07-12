@@ -17,6 +17,9 @@
 
 package org.apache.doris.datasource.iceberg;
 
+import org.apache.doris.analysis.AlterViewStmt;
+import org.apache.doris.analysis.CreateViewStmt;
+import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ThreadPoolManager;
 import org.apache.doris.common.security.authentication.PreExecutionAuthenticator;
 import org.apache.doris.datasource.ExternalCatalog;
@@ -130,5 +133,20 @@ public abstract class IcebergExternalCatalog extends ExternalCatalog {
     @Override
     public boolean viewExists(String dbName, String viewName) {
         return metadataOps.viewExists(dbName, viewName);
+    }
+
+    @Override
+    public void createView(CreateViewStmt createViewStmt) throws DdlException {
+        metadataOps.createView(createViewStmt);
+    }
+
+    @Override
+    public void alterView(AlterViewStmt alterViewStmt) throws DdlException {
+        metadataOps.alterView(alterViewStmt);
+    }
+
+    @Override
+    public void dropView(String dbName, String viewName) throws DdlException {
+        metadataOps.dropView(dbName, viewName);
     }
 }

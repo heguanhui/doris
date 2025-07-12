@@ -17,7 +17,9 @@
 
 package org.apache.doris.datasource.operations;
 
+import org.apache.doris.analysis.AlterViewStmt;
 import org.apache.doris.analysis.CreateTableStmt;
+import org.apache.doris.analysis.CreateViewStmt;
 import org.apache.doris.common.DdlException;
 import org.apache.doris.common.UserException;
 import org.apache.doris.datasource.ExternalTable;
@@ -253,6 +255,28 @@ public interface ExternalMetadataOps {
      */
     default List<String> listViewNames(String db) {
         return Collections.emptyList();
+    }
+
+    /**
+     * Create an external view.
+     * @param createViewStmt
+     * @return
+     */
+    default void createView(CreateViewStmt createViewStmt) throws DdlException {
+        throw new UnsupportedOperationException("Create view is not supported.");
+    }
+
+    /**
+     * Alter an external view
+     * @param alterViewStmt
+     * @throws DdlException
+     */
+    default void alterView(AlterViewStmt alterViewStmt) throws DdlException {
+        throw new UnsupportedOperationException("Alter view is not supported.");
+    }
+
+    default void dropView(String dbName, String viewName) throws DdlException {
+        throw new UnsupportedOperationException("Drop view is not supported.");
     }
 
 }

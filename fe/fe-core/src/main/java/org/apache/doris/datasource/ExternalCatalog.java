@@ -17,7 +17,9 @@
 
 package org.apache.doris.datasource;
 
+import org.apache.doris.analysis.AlterViewStmt;
 import org.apache.doris.analysis.CreateTableStmt;
+import org.apache.doris.analysis.CreateViewStmt;
 import org.apache.doris.analysis.PartitionNames;
 import org.apache.doris.analysis.TableName;
 import org.apache.doris.catalog.DatabaseIf;
@@ -1428,5 +1430,34 @@ public abstract class ExternalCatalog
             throw e;
         }
     }
+
+    /**
+     * Create an external view.
+     * @param createViewStmt
+     * @return
+     */
+    public void createView(CreateViewStmt createViewStmt) throws DdlException {
+        throw new UnsupportedOperationException("Create view is not supported.");
+    }
+
+    /**
+     * Alter an external view
+     *
+     * @param alterViewStmt
+     */
+    public void alterView(AlterViewStmt alterViewStmt) throws DdlException {
+        throw new UnsupportedOperationException("Alter view is not supported.");
+    }
+
+    /**
+     * Drop an external view
+     *
+     * @param dbName
+     * @param viewName
+     */
+    public void dropView(String dbName, String viewName) throws DdlException {
+        throw new UnsupportedOperationException("Drop view is not supported.");
+    }
+
 }
 
