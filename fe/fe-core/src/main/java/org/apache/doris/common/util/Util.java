@@ -24,6 +24,7 @@ import org.apache.doris.cloud.security.SecurityChecker;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.FeNameFormat;
 import org.apache.doris.datasource.InternalCatalog;
+import org.apache.doris.datasource.iceberg.IcebergExternalCatalog;
 import org.apache.doris.datasource.iceberg.IcebergExternalTable;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.thrift.TFileCompressType;
@@ -525,7 +526,7 @@ public class Util {
     }
 
     public static void prohibitExternalCatalog(String catalog, String msg) throws AnalysisException {
-        if (!Strings.isNullOrEmpty(catalog) && Env.getCurrentEnv().getCatalogMgr().getCatalog(catalog) instanceof IcebergExternalTable) {
+        if (!Strings.isNullOrEmpty(catalog) && Env.getCurrentEnv().getCatalogMgr().getCatalog(catalog) instanceof IcebergExternalCatalog) {
             // allow iceberg catalog to create view
             return;
         }
