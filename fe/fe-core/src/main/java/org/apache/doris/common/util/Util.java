@@ -18,11 +18,13 @@
 package org.apache.doris.common.util;
 
 import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.PrimitiveType;
 import org.apache.doris.cloud.security.SecurityChecker;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.FeNameFormat;
 import org.apache.doris.datasource.InternalCatalog;
+import org.apache.doris.datasource.iceberg.IcebergExternalTable;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.thrift.TFileCompressType;
 import org.apache.doris.thrift.TFileFormatType;
@@ -523,6 +525,10 @@ public class Util {
     }
 
     public static void prohibitExternalCatalog(String catalog, String msg) throws AnalysisException {
+        if (!Strings.isNullOrEmpty(catalog) && Env.getCurrentEnv().getCatalogMgr().getCatalog(catalog) instanceof IcebergExternalTable) {
+            // allow iceberg catalog to create view
+            return;
+        }
         if (!Strings.isNullOrEmpty(catalog) && !catalog.equals(InternalCatalog.INTERNAL_CATALOG_NAME)) {
             throw new AnalysisException(String.format("External catalog '%s' is not allowed in '%s'", catalog, msg));
         }
