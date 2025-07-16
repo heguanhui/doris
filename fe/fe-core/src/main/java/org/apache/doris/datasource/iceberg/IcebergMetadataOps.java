@@ -605,19 +605,32 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
         boolean replace = createViewStmt.isSetOrReplace();
         String sqlDialect = "doris";
         String viewSql = createViewStmt.getInlineViewDef();
-        performCreateView(viewCatalog, tableIdentifier, sqlDialect, viewSql, replace);
+        Schema schema = transformToIcebergSchema(createViewStmt.getColumns());
+        performCreateView(viewCatalog, tableIdentifier, schema, sqlDialect, viewSql, replace);
+    }
+
+    private Schema transformToIcebergSchema(List<Column> columns) {
+        List<StructField> collect = columns.stream()
+                .map(col -> new StructField(col.getName(), col.getType(), col.getComment(), col.isAllowNull()))
+                .collect(Collectors.toList());
+        StructType structType = new StructType(new ArrayList<>(collect));
+        Type visit =
+                DorisTypeVisitor.visit(structType, new DorisTypeToIcebergType(structType));
+        return new Schema(visit.asNestedType().asStructType().fields());
     }
 
     private void performCreateView(ViewCatalog viewCatalog, TableIdentifier tableIdentifier,
-            String sqlDialect, String viewSql, boolean replace) throws DdlException {
+            Schema schema, String sqlDialect, String viewSql, boolean replace) throws DdlException {
         try {
             preExecutionAuthenticator.execute(() -> {
                 if (replace) {
                     viewCatalog.buildView(tableIdentifier)
+                            .withSchema(schema)
                             .withQuery(sqlDialect, viewSql)
                             .replace();
                 } else {
                     viewCatalog.buildView(tableIdentifier)
+                            .withSchema(schema)
                             .withQuery(sqlDialect, viewSql)
                             .create();
                 }
@@ -644,7 +657,8 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
         String viewSql = alterViewStmt.getInlineViewDef();
         TableIdentifier tableIdentifier = getTableIdentifier(dbName, viewName);
         String sqlDialect = "doris";
-        performCreateView(viewCatalog, tableIdentifier, sqlDialect, viewSql, false);
+        Schema schema = transformToIcebergSchema(alterViewStmt.getColumns());
+        performCreateView(viewCatalog, tableIdentifier, schema, sqlDialect, viewSql, false);
     }
 
     @Override
