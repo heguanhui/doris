@@ -95,6 +95,7 @@ import org.apache.doris.metric.MetricRepo;
 import org.apache.doris.mtmv.MTMVUtil;
 import org.apache.doris.mysql.privilege.UserPropertyInfo;
 import org.apache.doris.plugin.PluginInfo;
+import org.apache.doris.policy.DropPoliciesForUserLog;
 import org.apache.doris.policy.DropPolicyLog;
 import org.apache.doris.policy.Policy;
 import org.apache.doris.policy.StoragePolicy;
@@ -1483,6 +1484,13 @@ public class EditLog {
                     env.getTSOService().replayWindowEndTSO((TSOTimestamp) journal.getData());
                     break;
                 }
+                case OperationType.OP_DROP_POLICIES_FOR_USER: {
+                    DropPoliciesForUserLog log = (DropPoliciesForUserLog) journal.getData();
+                    if (log != null) {
+                        env.getPolicyMgr().replayDropPoliciesForUser(log);
+                    }
+                    break;
+                }
                 default: {
                     IOException e = new IOException();
                     LOG.error("UNKNOWN Operation Type {}, log id: {}", opCode, logId, e);
@@ -2623,5 +2631,9 @@ public class EditLog {
 
     public long logMetaSyncPoint(CloudMetaSyncPoint syncPoint) {
         return logEdit(OperationType.OP_META_SYNC_POINT, syncPoint);
+    }
+
+    public void logDropPoliciesForUser(DropPoliciesForUserLog log) {
+        logEdit(OperationType.OP_DROP_POLICIES_FOR_USER, log);
     }
 }

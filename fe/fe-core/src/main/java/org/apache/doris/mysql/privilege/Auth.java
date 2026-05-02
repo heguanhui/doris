@@ -60,6 +60,7 @@ import org.apache.doris.nereids.trees.plans.commands.refresh.RefreshLdapCommand;
 import org.apache.doris.persist.AlterUserOperationLog;
 import org.apache.doris.persist.LdapInfo;
 import org.apache.doris.persist.PrivInfo;
+import org.apache.doris.policy.DropPoliciesForUserLog;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.resource.computegroup.ComputeGroup;
 import org.apache.doris.resource.workloadgroup.WorkloadGroupMgr;
@@ -612,6 +613,11 @@ public class Auth implements Writable {
 
             if (!isReplay) {
                 Env.getCurrentEnv().getEditLog().logNewDropUser(userIdent);
+                DropPoliciesForUserLog dropPoliciesForUserLog = Env.getCurrentEnv().getPolicyMgr()
+                        .dropPoliciesForUser(userIdent);
+                if (dropPoliciesForUserLog != null && !dropPoliciesForUserLog.getPolicyLogs().isEmpty()) {
+                    Env.getCurrentEnv().getEditLog().logDropPoliciesForUser(dropPoliciesForUserLog);
+                }
             }
             LOG.info("finished to drop user: {}, is replay: {}", userIdent.getQualifiedUser(), isReplay);
         } finally {

@@ -133,6 +133,7 @@ import org.apache.doris.persist.TableRenameColumnInfo;
 import org.apache.doris.persist.TableStatsDeletionLog;
 import org.apache.doris.persist.TruncateTableInfo;
 import org.apache.doris.plugin.PluginInfo;
+import org.apache.doris.policy.DropPoliciesForUserLog;
 import org.apache.doris.policy.DropPolicyLog;
 import org.apache.doris.policy.Policy;
 import org.apache.doris.policy.StoragePolicy;
@@ -1024,6 +1025,11 @@ public class JournalEntity implements Writable {
             }
             case OperationType.OP_TSO_TIMESTAMP_WINDOW_END: {
                 data = TSOTimestamp.read(in);
+                isRead = true;
+                break;
+            }
+            case OperationType.OP_DROP_POLICIES_FOR_USER: {
+                data = DropPoliciesForUserLog.read(in);
                 isRead = true;
                 break;
             }

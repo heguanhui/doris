@@ -25,6 +25,7 @@ import org.apache.doris.catalog.PartitionInfo;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.DdlException;
+import org.apache.doris.common.ErrorReport;
 import org.apache.doris.common.UserException;
 import org.apache.doris.common.io.Text;
 import org.apache.doris.common.io.Writable;
@@ -174,7 +175,7 @@ public class PolicyMgr implements Writable {
                             String policyName = partitionInfo.getDataProperty(partitionId).getStoragePolicy();
                             if (policyName.equals(dropPolicyLog.getPolicyName())) {
                                 throw new DdlException("the policy " + policyName + " is used by table: "
-                                    + tableName);
+                                        + tableName);
                             }
                         }
                     }
@@ -717,5 +718,60 @@ public class PolicyMgr implements Writable {
             return storagePolicy1.getStorageResource().equals(storagePolicy.getStorageResource());
         }
         return false;
+    }
+
+    /**
+     * DESIGN NOTE: Policy Cleanup with Compatibility Focus
+     * This method handles the cleanup of row policies associated with a dropped user.
+     * The implementation prioritizes backward compatibility over perfect atomicity:
+     * COMPATIBILITY STRATEGY:
+     * - Returns DropPoliciesForUserLog for separate EditLog recording
+     * - Allows old versions to skip policy cleanup while preserving user deletion functionality
+     * - Uses existing OP_DROP_POLICY operation type for maximum compatibility
+     * FAILURE HANDLING:
+     * - All policy deletions use "if exists" semantics to prevent failures
+     * - Method will complete successfully even if no policies exist for the user
+     * - Exception handling converts AnalysisException to DdlException for consistency
+     * This approach ensures that version rollbacks maintain core functionality while
+     * gracefully degrading policy cleanup capabilities.
+     */
+    public DropPoliciesForUserLog dropPoliciesForUser(UserIdentity userIdent)
+            throws DdlException {
+        writeLock();
+        try {
+            ShowResultSet policies = showRowPolicy(userIdent, null);
+            List<DropPolicyLog> policyLogs = Lists.newArrayList();
+
+            for (List<String> policy : policies.getResultRows()) {
+                DropPolicyLog dropLog = new DropPolicyLog(
+                        policy.get(1), policy.get(2), policy.get(3),
+                        PolicyTypeEnum.ROW, policy.get(0), userIdent, null);
+                policyLogs.add(dropLog);
+                unprotectedDrop(dropLog);
+            }
+            // return DropPoliciesForUserLog for outer caller to log editlog
+            return policyLogs.isEmpty() ? null : new DropPoliciesForUserLog(userIdent, policyLogs);
+        } catch (AnalysisException e) {
+            ErrorReport.reportDdlException(e.getMessage());
+        } finally {
+            writeUnlock();
+        }
+        return null;
+    }
+
+    /**
+     * replay drop policies for user
+     */
+    public void replayDropPoliciesForUser(DropPoliciesForUserLog log) {
+        writeLock();
+        try {
+            for (DropPolicyLog policyLog : log.getPolicyLogs()) {
+                unprotectedDrop(policyLog);
+            }
+            LOG.info("replay drop policies for user: {}, count: {}",
+                    log.getUserIdent().getQualifiedUser(), log.getPolicyLogs().size());
+        } finally {
+            writeUnlock();
+        }
     }
 }

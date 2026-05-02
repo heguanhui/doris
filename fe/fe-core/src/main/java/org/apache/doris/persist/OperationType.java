@@ -434,6 +434,7 @@ public class OperationType {
     public static final short OP_META_SYNC_POINT = 1101;
 
     public static final short OP_TSO_TIMESTAMP_WINDOW_END = 1200;
+    public static final short OP_DROP_POLICIES_FOR_USER = 1201;
 
     /**
      * Get opcode name by op code.
