@@ -23,6 +23,7 @@ import org.apache.doris.nereids.trees.expressions.functions.table.CdcStream;
 import org.apache.doris.nereids.trees.expressions.functions.table.File;
 import org.apache.doris.nereids.trees.expressions.functions.table.Frontends;
 import org.apache.doris.nereids.trees.expressions.functions.table.FrontendsDisks;
+import org.apache.doris.nereids.trees.expressions.functions.table.Ftp;
 import org.apache.doris.nereids.trees.expressions.functions.table.GroupCommit;
 import org.apache.doris.nereids.trees.expressions.functions.table.Hdfs;
 import org.apache.doris.nereids.trees.expressions.functions.table.Http;
@@ -37,6 +38,7 @@ import org.apache.doris.nereids.trees.expressions.functions.table.PartitionValue
 import org.apache.doris.nereids.trees.expressions.functions.table.Partitions;
 import org.apache.doris.nereids.trees.expressions.functions.table.Query;
 import org.apache.doris.nereids.trees.expressions.functions.table.S3;
+import org.apache.doris.nereids.trees.expressions.functions.table.Sftp;
 import org.apache.doris.nereids.trees.expressions.functions.table.TableValuedFunction;
 import org.apache.doris.nereids.trees.expressions.functions.table.Tasks;
 
@@ -122,6 +124,14 @@ public interface TableValuedFunctionVisitor<R, C> {
 
     default R visitS3(S3 s3, C context) {
         return visitTableValuedFunction(s3, context);
+    }
+
+    default R visitFtp(Ftp ftp, C context) {
+        return visitTableValuedFunction(ftp, context);
+    }
+
+    default R visitSftp(Sftp sftp, C context) {
+        return visitTableValuedFunction(sftp, context);
     }
 
     default R visitQuery(Query query, C context) {

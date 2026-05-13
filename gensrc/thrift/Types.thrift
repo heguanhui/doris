@@ -702,6 +702,8 @@ enum TFileType {
     FILE_HDFS = 4,
     FILE_NET = 5,       // read file by network, such as http
     FILE_HTTP = 6,
+    FILE_FTP = 7,
+    FILE_SFTP = 8,
 }
 
 struct TTabletCommitInfo {

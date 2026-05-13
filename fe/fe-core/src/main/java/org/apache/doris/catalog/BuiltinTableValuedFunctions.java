@@ -23,6 +23,7 @@ import org.apache.doris.nereids.trees.expressions.functions.table.CdcStream;
 import org.apache.doris.nereids.trees.expressions.functions.table.File;
 import org.apache.doris.nereids.trees.expressions.functions.table.Frontends;
 import org.apache.doris.nereids.trees.expressions.functions.table.FrontendsDisks;
+import org.apache.doris.nereids.trees.expressions.functions.table.Ftp;
 import org.apache.doris.nereids.trees.expressions.functions.table.GroupCommit;
 import org.apache.doris.nereids.trees.expressions.functions.table.Hdfs;
 import org.apache.doris.nereids.trees.expressions.functions.table.Http;
@@ -40,6 +41,7 @@ import org.apache.doris.nereids.trees.expressions.functions.table.PartitionValue
 import org.apache.doris.nereids.trees.expressions.functions.table.Partitions;
 import org.apache.doris.nereids.trees.expressions.functions.table.Query;
 import org.apache.doris.nereids.trees.expressions.functions.table.S3;
+import org.apache.doris.nereids.trees.expressions.functions.table.Sftp;
 import org.apache.doris.nereids.trees.expressions.functions.table.Tasks;
 
 import com.google.common.collect.ImmutableList;
@@ -71,6 +73,8 @@ public class BuiltinTableValuedFunctions implements FunctionHelper {
             tableValued(PartitionValues.class, "partition_values"),
             tableValued(File.class, "file"),
             tableValued(Http.class, "http"),
+            tableValued(Ftp.class, "ftp"),
+            tableValued(Sftp.class, "sftp"),
             tableValued(ParquetMeta.class, "parquet_meta"),
             tableValued(ParquetFileMetadata.class, "parquet_file_metadata"),
             tableValued(ParquetKvMetadata.class, "parquet_kv_metadata"),

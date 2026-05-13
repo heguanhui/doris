@@ -20,7 +20,9 @@ package org.apache.doris.fs;
 import org.apache.doris.datasource.property.storage.AbstractS3CompatibleProperties;
 import org.apache.doris.datasource.property.storage.AzureProperties;
 import org.apache.doris.datasource.property.storage.BrokerProperties;
+import org.apache.doris.datasource.property.storage.FtpProperties;
 import org.apache.doris.datasource.property.storage.HdfsCompatibleProperties;
+import org.apache.doris.datasource.property.storage.SftpProperties;
 import org.apache.doris.datasource.property.storage.StorageProperties;
 
 import org.apache.commons.lang3.StringUtils;
@@ -85,6 +87,10 @@ public final class StoragePropertiesConverter {
             map.put("_STORAGE_TYPE_", "HDFS");
         } else if (props instanceof BrokerProperties) {
             map.put("_STORAGE_TYPE_", "BROKER");
+        } else if (props instanceof FtpProperties) {
+            map.put("_STORAGE_TYPE_", "FTP");
+        } else if (props instanceof SftpProperties) {
+            map.put("_STORAGE_TYPE_", "SFTP");
         }
 
         return map;

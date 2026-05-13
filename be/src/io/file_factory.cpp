@@ -35,6 +35,9 @@
 #include "io/fs/hdfs_file_reader.h"
 #include "io/fs/hdfs_file_system.h"
 #include "io/fs/hdfs_file_writer.h"
+#include "io/fs/ftp_file_reader.h"
+#include "io/fs/ftp_file_system.h"
+#include "io/fs/ftp_file_writer.h"
 #include "io/fs/http_file_reader.h"
 #include "io/fs/http_file_system.h"
 #include "io/fs/local_file_system.h"
@@ -42,6 +45,9 @@
 #include "io/fs/s3_file_reader.h"
 #include "io/fs/s3_file_system.h"
 #include "io/fs/s3_file_writer.h"
+#include "io/fs/sftp_file_reader.h"
+#include "io/fs/sftp_file_system.h"
+#include "io/fs/sftp_file_writer.h"
 #include "io/fs/stream_load_pipe.h"
 #include "io/hdfs_builder.h"
 #include "io/hdfs_util.h"
@@ -131,6 +137,12 @@ Result<io::FileSystemSPtr> FileFactory::create_fs(const io::FSPropertiesRef& fs_
         }
         return io::HttpFileSystem::create(it->second, io::FileSystem::TMP_FS_ID, kv);
     }
+    case TFileType::FILE_FTP: {
+        return io::FtpFileSystem::create(*fs_properties.properties, io::FileSystem::TMP_FS_ID);
+    }
+    case TFileType::FILE_SFTP: {
+        return io::SftpFileSystem::create(*fs_properties.properties, io::FileSystem::TMP_FS_ID);
+    }
     default:
         return ResultError(Status::InternalError("unsupported fs type: {}",
                                                  std::to_string(fs_properties.type)));
@@ -191,6 +203,12 @@ Result<io::FileWriterPtr> FileFactory::create_file_writer(
         RETURN_IF_ERROR_RESULT(ExecEnv::GetInstance()->hdfs_mgr()->get_or_create_fs(
                 hdfs_params, hdfs_params.fs_name, &handler));
         return io::HdfsFileWriter::create(path, handler, hdfs_params.fs_name, &options);
+    }
+    case TFileType::FILE_FTP: {
+        return io::FtpFileWriter::create(path, properties, &options);
+    }
+    case TFileType::FILE_SFTP: {
+        return io::SftpFileWriter::create(path, properties, &options);
     }
     default:
         return ResultError(
@@ -271,6 +289,20 @@ Result<io::FileReaderSPtr> FileFactory::_create_file_reader_internal(
     }
     case TFileType::FILE_HTTP: {
         return io::HttpFileReader::create(file_description.path, system_properties.properties,
+                                          reader_options, profile)
+                .and_then([&](auto&& reader) {
+                    return io::create_cached_file_reader(std::move(reader), reader_options);
+                });
+    }
+    case TFileType::FILE_FTP: {
+        return io::FtpFileReader::create(file_description.path, system_properties.properties,
+                                         reader_options, profile)
+                .and_then([&](auto&& reader) {
+                    return io::create_cached_file_reader(std::move(reader), reader_options);
+                });
+    }
+    case TFileType::FILE_SFTP: {
+        return io::SftpFileReader::create(file_description.path, system_properties.properties,
                                           reader_options, profile)
                 .and_then([&](auto&& reader) {
                     return io::create_cached_file_reader(std::move(reader), reader_options);

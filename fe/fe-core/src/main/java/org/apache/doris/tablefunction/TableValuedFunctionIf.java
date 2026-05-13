@@ -102,6 +102,10 @@ public abstract class TableValuedFunctionIf {
                 return new FileTableValuedFunction(params);
             case HttpTableValuedFunction.NAME:
                 return new HttpTableValuedFunction(params);
+            case FtpTableValuedFunction.NAME:
+                return new FtpTableValuedFunction(params);
+            case SftpTableValuedFunction.NAME:
+                return new SftpTableValuedFunction(params);
             default:
                 throw new AnalysisException("Could not find table function " + funcName);
         }
