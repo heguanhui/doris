@@ -26,6 +26,7 @@ import org.apache.doris.mysql.privilege.PrivPredicate;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.utframe.TestWithFeService;
 
+import com.google.common.collect.Lists;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -54,7 +55,8 @@ public class DropRowPolicyCommandTest extends TestWithFeService {
         Mockito.doReturn(true).when(spyAcm).checkGlobalPriv(
                 Mockito.nullable(ConnectContext.class), Mockito.eq(PrivPredicate.GRANT));
         Deencapsulation.setField(env, "accessManager", spyAcm);
-        DropRowPolicyCommand command = new DropRowPolicyCommand(false, "test_policy", tableNameInfo, user, "role1");
+        DropRowPolicyCommand command = new DropRowPolicyCommand(false, "test_policy", tableNameInfo,
+                Lists.newArrayList(user), Lists.newArrayList("role1"));
         Assertions.assertDoesNotThrow(() -> command.validate(connectContext));
     }
 }

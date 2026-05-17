@@ -53,6 +53,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
@@ -352,6 +353,64 @@ public class PolicyMgr implements Writable {
             return false;
         });
         typeToPolicyMap.put(log.getType(), policies);
+    }
+
+    public List<RowPolicy> findMatchedRowPolicies(String ctlName, String dbName, String tableName,
+            String policyName, List<UserIdentity> users, List<String> roles) {
+        List<RowPolicy> res = Lists.newArrayList();
+        readLock();
+        try {
+            List<Policy> policies = getPoliciesByType(PolicyTypeEnum.ROW);
+            for (Policy policy : policies) {
+                if (!(policy instanceof RowPolicy)) {
+                    continue;
+                }
+                RowPolicy rowPolicy = (RowPolicy) policy;
+                if (!matchRowPolicyCondition(rowPolicy, ctlName, dbName, tableName, policyName, users, roles)) {
+                    continue;
+                }
+                res.add(rowPolicy);
+            }
+            return res;
+        } finally {
+            readUnlock();
+        }
+    }
+
+    private boolean matchRowPolicyCondition(RowPolicy rowPolicy, String ctlName, String dbName,
+            String tableName, String policyName, List<UserIdentity> users, List<String> roles) {
+        if (!StringUtils.isEmpty(ctlName) && !StringUtils.equals(ctlName, rowPolicy.getCtlName())) {
+            return false;
+        }
+        if (!StringUtils.isEmpty(dbName) && !StringUtils.equals(dbName, rowPolicy.getDbName())) {
+            return false;
+        }
+        if (!StringUtils.isEmpty(tableName) && !StringUtils.equals(tableName, rowPolicy.getTableName())) {
+            return false;
+        }
+        if (!StringUtils.isEmpty(policyName) && !StringUtils.equals(policyName, rowPolicy.getPolicyName())) {
+            return false;
+        }
+        boolean hasUserFilter = !users.isEmpty();
+        boolean hasRoleFilter = !roles.isEmpty();
+        if (!hasUserFilter && !hasRoleFilter) {
+            return true;
+        }
+        if (hasUserFilter && rowPolicy.getUser() != null) {
+            for (UserIdentity user : users) {
+                if (Objects.equals(user, rowPolicy.getUser())) {
+                    return true;
+                }
+            }
+        }
+        if (hasRoleFilter && !StringUtils.isEmpty(rowPolicy.getRoleName())) {
+            for (String role : roles) {
+                if (role.equals(rowPolicy.getRoleName())) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     public List<RowPolicy> getUserPolicies(String ctlName, String dbName, String tableName, UserIdentity user) {

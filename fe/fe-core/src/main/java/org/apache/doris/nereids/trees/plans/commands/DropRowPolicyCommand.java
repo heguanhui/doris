@@ -22,6 +22,7 @@ import org.apache.doris.analysis.UserIdentity;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.info.TableNameInfo;
 import org.apache.doris.common.AnalysisException;
+import org.apache.doris.common.DdlException;
 import org.apache.doris.common.ErrorCode;
 import org.apache.doris.common.ErrorReport;
 import org.apache.doris.mysql.privilege.PrivPredicate;
@@ -29,8 +30,14 @@ import org.apache.doris.nereids.trees.plans.PlanType;
 import org.apache.doris.nereids.trees.plans.visitor.PlanVisitor;
 import org.apache.doris.policy.DropPolicyLog;
 import org.apache.doris.policy.PolicyTypeEnum;
+import org.apache.doris.policy.RowPolicy;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.StmtExecutor;
+
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * DropRowPolicyCommand
@@ -39,8 +46,8 @@ public class DropRowPolicyCommand extends DropCommand {
     private final boolean ifExists;
     private final String policyName;
     private final TableNameInfo tableNameInfo;
-    private final UserIdentity user;
-    private final String roleName;
+    private final List<UserIdentity> users;
+    private final List<String> roles;
 
     /**
      * DropRowPolicyCommand
@@ -48,37 +55,111 @@ public class DropRowPolicyCommand extends DropCommand {
     public DropRowPolicyCommand(boolean ifExists,
                                 String policyName,
                                 TableNameInfo tableNameInfo,
-                                UserIdentity user,
-                                String roleName) {
+                                List<UserIdentity> users,
+                                List<String> roles) {
         super(PlanType.DROP_ROW_POLICY_COMMAND);
         this.ifExists = ifExists;
         this.policyName = policyName;
         this.tableNameInfo = tableNameInfo;
-        this.user = user;
-        this.roleName = roleName;
+        this.users = users;
+        this.roles = roles;
     }
 
     @Override
     public void doRun(ConnectContext ctx, StmtExecutor executor) throws Exception {
         validate(ctx);
+
+        if (isSingleTargetDrop()) {
+            dropSingleTarget();
+        } else {
+            dropBatchTargets();
+        }
+    }
+
+    private boolean isSingleTargetDrop() {
+        return policyName != null && tableNameInfo != null
+                && ((users.size() <= 1 && roles.isEmpty())
+                || (users.isEmpty() && roles.size() <= 1));
+    }
+
+    private void dropSingleTarget() throws Exception {
+        UserIdentity user = users.isEmpty() ? null : users.get(0);
+        String roleName = roles.isEmpty() ? null : roles.get(0);
         DropPolicyLog dropPolicyLog = new DropPolicyLog(tableNameInfo.getCtl(), tableNameInfo.getDb(),
                 tableNameInfo.getTbl(), PolicyTypeEnum.ROW, policyName, user, roleName);
         Env.getCurrentEnv().getPolicyMgr().dropPolicy(dropPolicyLog, ifExists);
+    }
+
+    private void dropBatchTargets() throws Exception {
+        String ctlName = tableNameInfo != null ? tableNameInfo.getCtl() : null;
+        String dbName = tableNameInfo != null ? tableNameInfo.getDb() : null;
+        String tblName = tableNameInfo != null ? tableNameInfo.getTbl() : null;
+
+        List<RowPolicy> matchedPolicies = Env.getCurrentEnv().getPolicyMgr()
+                .findMatchedRowPolicies(ctlName, dbName, tblName, policyName, users, roles);
+
+        if (matchedPolicies.isEmpty()) {
+            if (ifExists) {
+                return;
+            }
+            throw new DdlException("the row policy not exist");
+        }
+
+        for (RowPolicy policy : matchedPolicies) {
+            DropPolicyLog dropPolicyLog = new DropPolicyLog(
+                    policy.getCtlName(), policy.getDbName(), policy.getTableName(),
+                    PolicyTypeEnum.ROW, policy.getPolicyName(), policy.getUser(), policy.getRoleName());
+            Env.getCurrentEnv().getPolicyMgr().dropPolicy(dropPolicyLog, true);
+        }
     }
 
     /**
      * validate
      */
     public void validate(ConnectContext ctx) throws AnalysisException {
-        tableNameInfo.analyze(ctx.getNameSpaceContext());
-        if (user != null) {
-            user.analyze();
+        if (policyName == null && tableNameInfo == null && users.isEmpty() && roles.isEmpty()) {
+            throw new AnalysisException("DROP ROW POLICY requires at least one of: "
+                    + "policy name ON table, FOR user, or FOR ROLE role");
         }
+        if (tableNameInfo != null) {
+            tableNameInfo.analyze(ctx.getNameSpaceContext());
+        }
+        for (UserIdentity user : users) {
+            user.analyze();
+            if (!Env.getCurrentEnv().getAuth().doesUserExist(user)) {
+                throw new AnalysisException("user not exist: " + user.getQualifiedUser());
+            }
+        }
+        for (String roleName : roles) {
+            if (!Env.getCurrentEnv().getAuth().doesRoleExist(roleName)) {
+                throw new AnalysisException("role not exist: " + roleName);
+            }
+        }
+        checkDuplicateUsers();
+        checkDuplicateRoles();
         // check auth
         if (!Env.getCurrentEnv().getAccessManager()
                 .checkGlobalPriv(ConnectContext.get(), PrivPredicate.GRANT)) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR,
                     PrivPredicate.GRANT.getPrivs().toString());
+        }
+    }
+
+    private void checkDuplicateUsers() throws AnalysisException {
+        Set<String> seen = new HashSet<>();
+        for (UserIdentity user : users) {
+            if (!seen.add(user.getQualifiedUser())) {
+                throw new AnalysisException("Duplicate user: " + user.getQualifiedUser());
+            }
+        }
+    }
+
+    private void checkDuplicateRoles() throws AnalysisException {
+        Set<String> seen = new HashSet<>();
+        for (String role : roles) {
+            if (!seen.add(role)) {
+                throw new AnalysisException("Duplicate role: " + role);
+            }
         }
     }
 
@@ -94,12 +175,12 @@ public class DropRowPolicyCommand extends DropCommand {
         return tableNameInfo;
     }
 
-    public UserIdentity getUser() {
-        return user;
+    public List<UserIdentity> getUsers() {
+        return users;
     }
 
-    public String getRoleName() {
-        return roleName;
+    public List<String> getRoles() {
+        return roles;
     }
 
     @Override

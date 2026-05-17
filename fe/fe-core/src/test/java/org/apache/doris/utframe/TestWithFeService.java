@@ -29,7 +29,6 @@ import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Replica;
 import org.apache.doris.catalog.Table;
 import org.apache.doris.catalog.TabletMeta;
-import org.apache.doris.catalog.info.TableNameInfo;
 import org.apache.doris.common.AnalysisException;
 import org.apache.doris.common.Config;
 import org.apache.doris.common.DdlException;
@@ -75,8 +74,6 @@ import org.apache.doris.nereids.util.MemoTestUtils;
 import org.apache.doris.persist.CreateTableInfo;
 import org.apache.doris.persist.EditLog;
 import org.apache.doris.planner.Planner;
-import org.apache.doris.policy.DropPolicyLog;
-import org.apache.doris.policy.PolicyTypeEnum;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.OriginStatement;
 import org.apache.doris.qe.QueryState;
@@ -757,10 +754,7 @@ public abstract class TestWithFeService {
     protected void dropPolicy(String sql) throws Exception {
         NereidsParser nereidsParser = new NereidsParser();
         DropRowPolicyCommand command = (DropRowPolicyCommand) nereidsParser.parseSingle(sql);
-        TableNameInfo tableNameInfo = command.getTableNameInfo();
-        DropPolicyLog dropPolicyLog = new DropPolicyLog(tableNameInfo.getCtl(), tableNameInfo.getDb(),
-                tableNameInfo.getTbl(), PolicyTypeEnum.ROW, command.getPolicyName(), command.getUser(), command.getRoleName());
-        Env.getCurrentEnv().getPolicyMgr().dropPolicy(dropPolicyLog, command.isIfExists());
+        command.run(createDefaultCtx(), new StmtExecutor(createDefaultCtx(), sql));
     }
 
     protected void createSqlBlockRule(String sql) throws Exception {

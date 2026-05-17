@@ -9013,11 +9013,16 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
     @Override
     public LogicalPlan visitDropRowPolicy(DorisParser.DropRowPolicyContext ctx) {
         boolean ifExist = ctx.EXISTS() != null;
-        String policyName = ctx.policyName.getText();
-        TableNameInfo tableNameInfo = new TableNameInfo(visitMultipartIdentifier(ctx.tableName));
-        UserIdentity userIdentity = ctx.userIdentify() != null ? visitUserIdentify(ctx.userIdentify()) : null;
-        String roleName = ctx.roleName != null ? ctx.roleName.getText() : null;
-        return new DropRowPolicyCommand(ifExist, policyName, tableNameInfo, userIdentity, roleName);
+        String policyName = ctx.policyName != null ? ctx.policyName.getText() : null;
+        TableNameInfo tableNameInfo = ctx.tableName != null
+                ? new TableNameInfo(visitMultipartIdentifier(ctx.tableName)) : null;
+        List<UserIdentity> users = ctx.users != null
+                ? ctx.users.stream().map(this::visitUserIdentify).collect(Collectors.toList())
+                : Lists.newArrayList();
+        List<String> roles = ctx.roles != null
+                ? ctx.roles.stream().map(ParseTree::getText).collect(Collectors.toList())
+                : Lists.newArrayList();
+        return new DropRowPolicyCommand(ifExist, policyName, tableNameInfo, users, roles);
     }
 
     @Override

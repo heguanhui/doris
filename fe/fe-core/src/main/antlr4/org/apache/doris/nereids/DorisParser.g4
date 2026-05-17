@@ -366,9 +366,9 @@ supportedDropStatement
     | DROP INDEX (IF EXISTS)? name=identifier ON tableName=multipartIdentifier
         partitionSpec?                                                            #dropIndex
     | DROP RESOURCE (IF EXISTS)? name=identifierOrText                          #dropResource
-    | DROP ROW POLICY (IF EXISTS)? policyName=identifier
-        ON tableName=multipartIdentifier
-        (FOR (userIdentify | ROLE roleName=identifier))?                        #dropRowPolicy
+    | DROP ROW POLICY (IF EXISTS)?
+        (policyName=identifier ON tableName=multipartIdentifier)?
+        (FOR (users+=userIdentify (COMMA users+=userIdentify)* | ROLE roles+=identifier (COMMA roles+=identifier)*))?   #dropRowPolicy
     | DROP DICTIONARY (IF EXISTS)? name=multipartIdentifier                     #dropDictionary
     | DROP STAGE (IF EXISTS)? name=identifier                                   #dropStage
     | DROP VIEW (IF EXISTS)? name=multipartIdentifier                           #dropView
