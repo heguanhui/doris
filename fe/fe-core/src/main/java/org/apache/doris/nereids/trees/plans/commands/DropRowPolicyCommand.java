@@ -34,6 +34,9 @@ import org.apache.doris.policy.RowPolicy;
 import org.apache.doris.qe.ConnectContext;
 import org.apache.doris.qe.StmtExecutor;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -43,6 +46,7 @@ import java.util.stream.Collectors;
  * DropRowPolicyCommand
  **/
 public class DropRowPolicyCommand extends DropCommand {
+    private static final Logger LOG = LogManager.getLogger(DropRowPolicyCommand.class);
     private final boolean ifExists;
     private final String policyName;
     private final TableNameInfo tableNameInfo;
@@ -61,14 +65,35 @@ public class DropRowPolicyCommand extends DropCommand {
         this.ifExists = ifExists;
         this.policyName = policyName;
         this.tableNameInfo = tableNameInfo;
-        this.users = users;
-        this.roles = roles;
+        this.users = deduplicateUsers(users);
+        this.roles = deduplicateRoles(roles);
+    }
+
+    private static List<UserIdentity> deduplicateUsers(List<UserIdentity> users) {
+        if (users.size() <= 1) {
+            return users;
+        }
+        Set<String> seen = new HashSet<>();
+        return users.stream().filter(user -> seen.add(user.getQualifiedUser()))
+                .collect(Collectors.toList());
+    }
+
+    private static List<String> deduplicateRoles(List<String> roles) {
+        if (roles.size() <= 1) {
+            return roles;
+        }
+        Set<String> seen = new HashSet<>();
+        return roles.stream().filter(role -> seen.add(role))
+                .collect(Collectors.toList());
     }
 
     @Override
     public void doRun(ConnectContext ctx, StmtExecutor executor) throws Exception {
+        LOG.info("DropRowPolicyCommand doRun: policyName={}, table={}, users={}, roles={}, ifExists={}",
+                policyName, tableNameInfo, users, roles, ifExists);
         validate(ctx);
 
+        LOG.info("DropRowPolicyCommand isSingleTargetDrop={}", isSingleTargetDrop());
         if (isSingleTargetDrop()) {
             dropSingleTarget();
         } else {
@@ -95,8 +120,13 @@ public class DropRowPolicyCommand extends DropCommand {
         String dbName = tableNameInfo != null ? tableNameInfo.getDb() : null;
         String tblName = tableNameInfo != null ? tableNameInfo.getTbl() : null;
 
+        LOG.info("dropBatchTargets: ctl={}, db={}, tbl={}, policyName={}, users={}, roles={}",
+                ctlName, dbName, tblName, policyName, users, roles);
+
         List<RowPolicy> matchedPolicies = Env.getCurrentEnv().getPolicyMgr()
                 .findMatchedRowPolicies(ctlName, dbName, tblName, policyName, users, roles);
+
+        LOG.info("dropBatchTargets: matched {} policies", matchedPolicies.size());
 
         if (matchedPolicies.isEmpty()) {
             if (ifExists) {
@@ -109,6 +139,8 @@ public class DropRowPolicyCommand extends DropCommand {
             DropPolicyLog dropPolicyLog = new DropPolicyLog(
                     policy.getCtlName(), policy.getDbName(), policy.getTableName(),
                     PolicyTypeEnum.ROW, policy.getPolicyName(), policy.getUser(), policy.getRoleName());
+            LOG.info("dropBatchTargets: dropping policy={} user={} role={}",
+                    policy.getPolicyName(), policy.getUser(), policy.getRoleName());
             Env.getCurrentEnv().getPolicyMgr().dropPolicy(dropPolicyLog, true);
         }
     }
@@ -126,40 +158,12 @@ public class DropRowPolicyCommand extends DropCommand {
         }
         for (UserIdentity user : users) {
             user.analyze();
-            if (!Env.getCurrentEnv().getAuth().doesUserExist(user)) {
-                throw new AnalysisException("user not exist: " + user.getQualifiedUser());
-            }
         }
-        for (String roleName : roles) {
-            if (!Env.getCurrentEnv().getAuth().doesRoleExist(roleName)) {
-                throw new AnalysisException("role not exist: " + roleName);
-            }
-        }
-        checkDuplicateUsers();
-        checkDuplicateRoles();
         // check auth
         if (!Env.getCurrentEnv().getAccessManager()
                 .checkGlobalPriv(ConnectContext.get(), PrivPredicate.GRANT)) {
             ErrorReport.reportAnalysisException(ErrorCode.ERR_SPECIFIC_ACCESS_DENIED_ERROR,
                     PrivPredicate.GRANT.getPrivs().toString());
-        }
-    }
-
-    private void checkDuplicateUsers() throws AnalysisException {
-        Set<String> seen = new HashSet<>();
-        for (UserIdentity user : users) {
-            if (!seen.add(user.getQualifiedUser())) {
-                throw new AnalysisException("Duplicate user: " + user.getQualifiedUser());
-            }
-        }
-    }
-
-    private void checkDuplicateRoles() throws AnalysisException {
-        Set<String> seen = new HashSet<>();
-        for (String role : roles) {
-            if (!seen.add(role)) {
-                throw new AnalysisException("Duplicate role: " + role);
-            }
         }
     }
 

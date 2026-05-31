@@ -9022,6 +9022,8 @@ public class LogicalPlanBuilder extends DorisParserBaseVisitor<Object> {
         List<String> roles = ctx.roles != null
                 ? ctx.roles.stream().map(ParseTree::getText).collect(Collectors.toList())
                 : Lists.newArrayList();
+        LOG.info("DEBUG visitDropRowPolicy: policyName={}, table={}, users={}, roles={}, ifExist={}",
+                policyName, tableNameInfo, users, roles, ifExist);
         return new DropRowPolicyCommand(ifExist, policyName, tableNameInfo, users, roles);
     }
 

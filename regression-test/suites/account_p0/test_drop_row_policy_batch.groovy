@@ -243,29 +243,17 @@ suite("test_drop_row_policy_batch") {
         exception "requires at least one of"
     }
 
-    // test8: duplicate user should fail
-    test {
-        sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ${user1}, ${user1}"
-        exception "Duplicate user"
-    }
+    // test8: duplicate user should be deduplicated silently
+    sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ${user1}, ${user1}"
 
-    // test9: duplicate role should fail
-    test {
-        sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ROLE ${role1}, ${role1}"
-        exception "Duplicate role"
-    }
+    // test9: duplicate role should be deduplicated silently
+    sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ROLE ${role1}, ${role1}"
 
-    // test10: nonexistent user should fail
-    test {
-        sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR nonexistent_user_xyz"
-        exception "user not exist"
-    }
+    // test10: nonexistent user with IF EXISTS should not throw (no policies found, silently skipped)
+    sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR nonexistent_user_xyz"
 
-    // test11: nonexistent role should fail
-    test {
-        sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ROLE nonexistent_role_xyz"
-        exception "role not exist"
-    }
+    // test11: nonexistent role with IF EXISTS should not throw (no policies found, silently skipped)
+    sql "DROP ROW POLICY IF EXISTS test_policy ON ${dbName}.${tableName1} FOR ROLE nonexistent_role_xyz"
 
     // test12: drop by policy name on table without FOR clause (drop all bindings of that policy on that table)
     sql """
