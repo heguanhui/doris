@@ -41,6 +41,7 @@
 #include "util/jsonb_document_cast.h"
 #include "util/jsonb_writer.h"
 #include "util/string_parser.hpp"
+#include "util/unaligned.h"
 
 namespace doris {
 
@@ -482,12 +483,10 @@ void DataTypeDecimalSerDe<T>::write_one_cell_to_jsonb(const IColumn& column, Jso
     StringRef data_ref = column.get_data_at(row_num);
     result.writeKey(cast_set<JsonbKeyValue::keyid_type>(col_id));
     if constexpr (T == TYPE_DECIMALV2) {
-        Decimal128V2::NativeType val =
-                *reinterpret_cast<const Decimal128V2::NativeType*>(data_ref.data);
+        Decimal128V2::NativeType val = unaligned_load<Decimal128V2::NativeType>(data_ref.data);
         result.writeInt128(val);
     } else if constexpr (T == TYPE_DECIMAL128I) {
-        Decimal128V3::NativeType val =
-                *reinterpret_cast<const Decimal128V3::NativeType*>(data_ref.data);
+        Decimal128V3::NativeType val = unaligned_load<Decimal128V3::NativeType>(data_ref.data);
         result.writeInt128(val);
     } else if constexpr (T == TYPE_DECIMAL32) {
         Decimal32::NativeType val = *reinterpret_cast<const Decimal32::NativeType*>(data_ref.data);
@@ -669,7 +668,7 @@ void DataTypeDecimalSerDe<T>::read_one_cell_from_jsonb(IColumn& column,
     } else if constexpr (T == TYPE_DECIMAL256) {
         // use binary type, since jsonb does not support int256
         const wide::Int256 val =
-                *reinterpret_cast<const wide::Int256*>(arg->unpack<JsonbBinaryVal>()->getBlob());
+                unaligned_load<wide::Int256>(arg->unpack<JsonbBinaryVal>()->getBlob());
         col.insert_value(Decimal256(val));
     } else {
         throw doris::Exception(ErrorCode::NOT_IMPLEMENTED_ERROR,

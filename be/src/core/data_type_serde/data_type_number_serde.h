@@ -33,6 +33,7 @@
 #include "core/string_ref.h"
 #include "core/types.h"
 #include "storage/olap_common.h"
+#include "util/unaligned.h"
 
 namespace doris {
 class JsonbOutStream;
@@ -226,7 +227,7 @@ Status DataTypeNumberSerDe<T>::read_column_from_pb(IColumn& column, const PValue
         column.resize(old_column_size + arg.bytes_value_size());
         auto& data = reinterpret_cast<ColumnType&>(column).get_data();
         for (int i = 0; i < arg.bytes_value_size(); ++i) {
-            data[old_column_size + i] = *(int128_t*)(arg.bytes_value(i).c_str());
+            data[old_column_size + i] = unaligned_load<int128_t>(arg.bytes_value(i).c_str());
         }
     } else {
         return Status::NotSupported("unknown ColumnType for reading from pb");

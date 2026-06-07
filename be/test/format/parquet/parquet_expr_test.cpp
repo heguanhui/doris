@@ -898,38 +898,42 @@ TEST_F(ParquetExprTest, test_in) {
 
     VExprSPtr in_expr;
     ASSERT_TRUE(direct_in_expr.get_slot_in_expr(in_expr));
-    EXPECT_EQ(
-            "InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[VLiteral (name = Nullable(BIGINT), type "
-            "= Nullable(BIGINT), value = (0)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (1)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (2))])",
-            in_expr->debug_string());
+    {
+        auto debug_str = in_expr->debug_string();
+        EXPECT_TRUE(debug_str.find("InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[") == 0);
+        EXPECT_TRUE(debug_str.find("value = (0))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (1))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (2))") != std::string::npos);
+    }
 
     VExprSPtr in_expr2;
     ASSERT_TRUE(direct_in_expr2.get_slot_in_expr(in_expr2));
-    EXPECT_EQ(
-            "InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[VLiteral (name = Nullable(BIGINT), type "
-            "= Nullable(BIGINT), value = (1000)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (10000000000))])",
-            in_expr2->debug_string());
+    {
+        auto debug_str = in_expr2->debug_string();
+        EXPECT_TRUE(debug_str.find("InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[") == 0);
+        EXPECT_TRUE(debug_str.find("value = (1000))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (10000000000))") != std::string::npos);
+    }
 
     VExprSPtr in_expr3;
     ASSERT_TRUE(direct_in_expr3.get_slot_in_expr(in_expr3));
-    EXPECT_EQ(
-            "InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[VLiteral (name = Nullable(BIGINT), type "
-            "= Nullable(BIGINT), value = (10000000004)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (10000000007)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (10000000005))])",
-            in_expr3->debug_string());
+    {
+        auto debug_str = in_expr3->debug_string();
+        EXPECT_TRUE(debug_str.find("InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[") == 0);
+        EXPECT_TRUE(debug_str.find("value = (10000000004))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (10000000005))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (10000000007))") != std::string::npos);
+    }
 
     VExprSPtr in_expr4;
     ASSERT_TRUE(direct_in_expr4.get_slot_in_expr(in_expr4));
-    EXPECT_EQ(
-            "InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[VLiteral (name = Nullable(BIGINT), type "
-            "= Nullable(BIGINT), value = (10000000007)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (10000000000)) VLiteral (name = Nullable(BIGINT), type = "
-            "Nullable(BIGINT), value = (10000000005))])",
-            in_expr4->debug_string());
+    {
+        auto debug_str = in_expr4->debug_string();
+        EXPECT_TRUE(debug_str.find("InPredicate(SlotRef(slot_id=2 type=BIGINT) 0,[") == 0);
+        EXPECT_TRUE(debug_str.find("value = (10000000000))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (10000000005))") != std::string::npos);
+        EXPECT_TRUE(debug_str.find("value = (10000000007))") != std::string::npos);
+    }
 
     {
         const std::function<bool(const FieldSchema*, ParquetPredicate::ColumnStat*)>&

@@ -27,6 +27,7 @@
 #include "exprs/function/cast/cast_to_ip.h"
 #include "exprs/function/cast/cast_to_string.h"
 #include "util/jsonb_writer.h"
+#include "util/unaligned.h"
 
 namespace doris {
 
@@ -115,7 +116,7 @@ Status DataTypeIPv6SerDe::read_column_from_pb(IColumn& column, const PValues& ar
     auto old_column_size = column.size();
     col_data.resize(old_column_size + arg.bytes_value_size());
     for (int i = 0; i < arg.bytes_value_size(); ++i) {
-        col_data[old_column_size + i] = *(IPv6*)(arg.bytes_value(i).c_str());
+        col_data[old_column_size + i] = unaligned_load<IPv6>(arg.bytes_value(i).c_str());
     }
     return Status::OK();
 }

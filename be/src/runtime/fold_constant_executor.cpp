@@ -63,6 +63,7 @@
 #include "runtime/thread_context.h"
 #include "util/defer_op.h"
 #include "util/uid_util.h"
+#include "util/unaligned.h"
 
 namespace doris {
 
@@ -220,7 +221,7 @@ Status FoldConstantExecutor::_get_result(void* src, size_t size, const DataTypeP
         break;
     }
     case TYPE_LARGEINT: {
-        result = LargeIntValue::to_string(*reinterpret_cast<__int128*>(src));
+        result = LargeIntValue::to_string(unaligned_load<__int128>(src));
         break;
     }
     case TYPE_FLOAT: {

@@ -24,6 +24,7 @@
 #include "core/data_type/data_type_decimal.h"
 #include "core/data_type/data_type_number.h"
 #include "core/types.h"
+#include "core/wide_integer_impl.h"
 #include "exprs/function/cast/cast_to_basic_number_common.h"
 
 namespace doris {
@@ -246,7 +247,8 @@ struct CastToDecimal {
                                    "to decimal");
             return false;
         }
-        using DoubleType = std::conditional_t<IsDecimal256<ToCppT>, long double, double>;
+        using DoubleType =
+                std::conditional_t<IsDecimal256<ToCppT>, FromDoubleIntermediateType, double>;
         DoubleType tmp = from * static_cast<DoubleType>(scale_multiplier);
         if (tmp <= DoubleType(min_result) || tmp >= DoubleType(max_result)) {
             if (params.is_strict) {
@@ -274,7 +276,8 @@ struct CastToDecimal {
                                    "to decimal");
             return false;
         }
-        using DoubleType = std::conditional_t<IsDecimal256<ToCppT>, long double, double>;
+        using DoubleType =
+                std::conditional_t<IsDecimal256<ToCppT>, FromDoubleIntermediateType, double>;
         DoubleType tmp = from * static_cast<DoubleType>(scale_multiplier);
         if (tmp <= DoubleType(min_result) || tmp >= DoubleType(max_result)) {
             if (params.is_strict) {

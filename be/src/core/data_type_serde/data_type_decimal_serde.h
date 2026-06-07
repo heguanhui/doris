@@ -29,6 +29,7 @@
 #include "core/data_type_serde/data_type_serde.h"
 #include "core/string_ref.h"
 #include "core/types.h"
+#include "util/unaligned.h"
 
 namespace doris {
 
@@ -181,7 +182,7 @@ Status DataTypeDecimalSerDe<T>::read_column_from_pb(IColumn& column, const PValu
     column.resize(old_column_size + arg.bytes_value_size());
     auto& data = reinterpret_cast<ColumnDecimal<T>&>(column).get_data();
     for (int i = 0; i < arg.bytes_value_size(); ++i) {
-        data[old_column_size + i] = *(FieldType*)(arg.bytes_value(i).c_str());
+        data[old_column_size + i] = unaligned_load<FieldType>(arg.bytes_value(i).c_str());
     }
     return Status::OK();
 }

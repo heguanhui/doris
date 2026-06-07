@@ -1034,9 +1034,10 @@ struct BitmapToBase64 {
                                         chars_data + encoded_offset);
             DCHECK(outlen > 0);
 
-            encoded_offset += (int)(4.0 * ceil((double)cur_ser_size / 3.0));
+            encoded_offset += outlen;
             offsets[i] = cast_set<UInt32>(encoded_offset);
         }
+        chars.resize(encoded_offset);
         return Status::OK();
     }
 };
