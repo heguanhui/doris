@@ -239,7 +239,7 @@ suite("test_iceberg_rest_case_sensibility", "p0,external") {
                 order_qt_sql18 """select * from CASE_TBL12;"""
             }
 
-            // // 5. truncate(todo not support for iceberg now)
+            // 5. truncate (covered by test_iceberg_truncate_table.groovy)
 
             // 6. drop table
             /// full qualified

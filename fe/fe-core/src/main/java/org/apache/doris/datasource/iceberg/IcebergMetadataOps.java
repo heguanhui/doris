@@ -54,6 +54,7 @@ import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Splitter;
 import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.iceberg.ManageSnapshots;
+import org.apache.iceberg.PartitionField;
 import org.apache.iceberg.PartitionSpec;
 import org.apache.iceberg.RowLevelOperationMode;
 import org.apache.iceberg.Schema;
@@ -82,6 +83,7 @@ import org.jetbrains.annotations.NotNull;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -455,8 +457,125 @@ public class IcebergMetadataOps implements ExternalMetadataOps {
     }
 
     @Override
-    public void truncateTableImpl(ExternalTable dorisTable, List<String> partitions) {
-        throw new UnsupportedOperationException("Truncate Iceberg table is not supported.");
+    public void truncateTableImpl(ExternalTable dorisTable, List<String> partitions) throws DdlException {
+        Table icebergTable = IcebergUtils.getIcebergTable(dorisTable);
+        try {
+            if (partitions == null || partitions.isEmpty()) {
+                executionAuthenticator.execute(() -> {
+                    icebergTable.newDelete()
+                            .deleteFromRowFilter(Expressions.alwaysTrue())
+                            .commit();
+                    return null;
+                });
+            } else {
+                org.apache.iceberg.expressions.Expression partitionFilter =
+                        buildPartitionFilterFromNames(icebergTable, partitions);
+                executionAuthenticator.execute(() -> {
+                    icebergTable.newDelete()
+                            .deleteFromRowFilter(partitionFilter)
+                            .commit();
+                    return null;
+                });
+            }
+        } catch (Exception e) {
+            throw new DdlException(
+                    "Failed to truncate table: " + dorisTable.getName()
+                            + ", error message is: " + ExceptionUtils.getRootCauseMessage(e), e);
+        }
+    }
+
+    @Override
+    public void afterTruncateTable(String dbName, String tblName, long updateTime) {
+        try {
+            Optional<ExternalDatabase<?>> db = dorisCatalog.getDbForReplay(dbName);
+            if (db.isPresent()) {
+                Optional<?> tbl = db.get().getTableForReplay(tblName);
+                if (tbl.isPresent()) {
+                    Env.getCurrentEnv().getRefreshManager()
+                            .refreshTableInternal(db.get(), (ExternalTable) tbl.get(), updateTime);
+                }
+            }
+        } catch (Exception e) {
+            LOG.warn("exception when calling afterTruncateTable for db: {}, table: {}, error: {}",
+                    dbName, tblName, e.getMessage(), e);
+        }
+    }
+
+    @VisibleForTesting
+    org.apache.iceberg.expressions.Expression buildPartitionFilterFromNames(
+            Table icebergTable, List<String> partitionNames) {
+        PartitionSpec spec = icebergTable.spec();
+        Schema schema = icebergTable.schema();
+        List<org.apache.iceberg.expressions.Expression> orPredicates = new ArrayList<>();
+
+        for (String partitionName : partitionNames) {
+            Map<String, String> partitionKVs = parsePartitionName(partitionName);
+            List<org.apache.iceberg.expressions.Expression> andPredicates = new ArrayList<>();
+
+            for (PartitionField field : spec.fields()) {
+                String partitionFieldName = field.name();
+                if (!partitionKVs.containsKey(partitionFieldName)) {
+                    continue;
+                }
+                if (!field.transform().isIdentity()) {
+                    throw new UnsupportedOperationException(String.format(
+                            "Truncating non-identity partition is not supported. "
+                                    + "Partition field '%s' uses transform '%s'. "
+                                    + "Only identity partition transforms are supported for TRUNCATE PARTITION.",
+                            partitionFieldName, field.transform().toString()));
+                }
+                String partitionValueStr = partitionKVs.get(partitionFieldName);
+                Types.NestedField sourceField = schema.findField(field.sourceId());
+                if (sourceField == null) {
+                    throw new RuntimeException(String.format(
+                            "Source field not found for partition field: %s", partitionFieldName));
+                }
+                Object partitionValue = IcebergUtils.parsePartitionValueFromString(
+                        partitionValueStr, sourceField.type());
+                String sourceColName = sourceField.name();
+                org.apache.iceberg.expressions.Expression eqExpr;
+                if (partitionValue == null) {
+                    eqExpr = Expressions.isNull(sourceColName);
+                } else {
+                    eqExpr = Expressions.equal(sourceColName, partitionValue);
+                }
+                andPredicates.add(eqExpr);
+            }
+
+            if (andPredicates.isEmpty()) {
+                return Expressions.alwaysTrue();
+            }
+            org.apache.iceberg.expressions.Expression andExpr = andPredicates.get(0);
+            for (int i = 1; i < andPredicates.size(); i++) {
+                andExpr = Expressions.and(andExpr, andPredicates.get(i));
+            }
+            orPredicates.add(andExpr);
+        }
+
+        if (orPredicates.isEmpty()) {
+            return Expressions.alwaysTrue();
+        }
+        org.apache.iceberg.expressions.Expression result = orPredicates.get(0);
+        for (int i = 1; i < orPredicates.size(); i++) {
+            result = Expressions.or(result, orPredicates.get(i));
+        }
+        return result;
+    }
+
+    @VisibleForTesting
+    Map<String, String> parsePartitionName(String partitionName) {
+        Map<String, String> kvs = new LinkedHashMap<>();
+        String[] parts = partitionName.split("/");
+        for (String part : parts) {
+            int eqIdx = part.indexOf('=');
+            if (eqIdx < 0) {
+                throw new IllegalArgumentException("Invalid partition name format: " + partitionName);
+            }
+            String key = part.substring(0, eqIdx);
+            String value = eqIdx + 1 < part.length() ? part.substring(eqIdx + 1) : null;
+            kvs.put(key, value);
+        }
+        return kvs;
     }
 
     @Override

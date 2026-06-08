@@ -238,38 +238,38 @@ suite("test_iceberg_hms_case_sensibility", "p0,external") {
             sql """insert overwrite table case_tbl12 values(4);"""
             order_qt_sql18 """select * from case_tbl12;"""
 
-            // // 5. truncate(todo not support for iceberg now)
-            // /// full qualified
-            // test {
-            //     sql """truncate table ICEBERG_HMS_CASE_DB2.CASE_TBL22"""
-            //     exception "Unknown database 'ICEBERG_HMS_CASE_DB2'"
-            // }
-            // test {
-            //     sql """truncate table ICEBERG_HMS_CASE_DB2.case_tbl22"""
-            //     exception "Unknown database 'ICEBERG_HMS_CASE_DB2'"
-            // }
-            // if (case_type.equals("0")) {
-            //     test {
-            //         sql """truncate table iceberg_hms_case_db2.CASE_TBL22"""
-            //         exception "Unknown table 'CASE_TBL22'"
-            //     }
-            // } else {
-            //     sql """truncate table iceberg_hms_case_db2.CASE_TBL22"""
-            // }
-            // sql """truncate table iceberg_hms_case_db2.case_tbl22 ;"""
-            // qt_sql19 """select * from iceberg_hms_case_db2.case_tbl22;""" // empty
-            // /// not full qualified
-            // sql """use iceberg_hms_case_db1;"""
-            // if (case_type.equals("0")) {
-            //     test {
-            //         sql """truncate table CASE_TBL12;"""
-            //         exception "Unknown table 'CASE_TBL12'"
-            //     }
-            // } else {
-            //     sql """truncate table CASE_TBL12;"""
-            // }
-            // sql """truncate table case_tbl12;"""
-            // qt_sql20 """select * from case_tbl12;""" // empty
+            // 5. truncate
+            /// full qualified
+            test {
+                sql """truncate table ICEBERG_HMS_CASE_DB2.CASE_TBL22"""
+                exception "Unknown database 'ICEBERG_HMS_CASE_DB2'"
+            }
+            test {
+                sql """truncate table ICEBERG_HMS_CASE_DB2.case_tbl22"""
+                exception "Unknown database 'ICEBERG_HMS_CASE_DB2'"
+            }
+            if (case_type.equals("0")) {
+                test {
+                    sql """truncate table iceberg_hms_case_db2.CASE_TBL22"""
+                    exception "Unknown table 'CASE_TBL22'"
+                }
+            } else {
+                sql """truncate table iceberg_hms_case_db2.CASE_TBL22"""
+            }
+            sql """truncate table iceberg_hms_case_db2.case_tbl22 ;"""
+            order_qt_sql19 """select * from iceberg_hms_case_db2.case_tbl22;"""
+            /// not full qualified
+            sql """use iceberg_hms_case_db1;"""
+            if (case_type.equals("0")) {
+                test {
+                    sql """truncate table CASE_TBL12;"""
+                    exception "Unknown table 'CASE_TBL12'"
+                }
+            } else {
+                sql """truncate table CASE_TBL12;"""
+            }
+            sql """truncate table case_tbl12;"""
+            order_qt_sql20 """select * from case_tbl12;"""
 
             // 6. drop table
             /// full qualified
