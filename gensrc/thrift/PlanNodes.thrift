@@ -939,7 +939,7 @@ struct TSchemaScanNode {
   // 13: optional list<TSchemaTableStructure> table_structure // deprecated
   14: optional string catalog
   15: optional list<Types.TNetworkAddress> fe_addr_list
-  16: optional string frontend_conjuncts
+  16: optional list<Exprs.TExpr> frontend_conjuncts
 }
 
 struct TMetaScanNode {

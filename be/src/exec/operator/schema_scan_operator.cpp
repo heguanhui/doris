@@ -26,6 +26,7 @@
 #include "exec/operator/operator.h"
 #include "runtime/runtime_profile.h"
 #include "util/string_util.h"
+#include "exprs/vexpr.h"
 
 namespace doris {
 class RuntimeState;
@@ -141,8 +142,9 @@ Status SchemaScanOperatorX::init(const TPlanNode& tnode, RuntimeState* state) {
     }
 
     if (tnode.schema_scan_node.__isset.frontend_conjuncts) {
-        _common_scanner_param->frontend_conjuncts =
-                state->obj_pool()->add(new std::string(tnode.schema_scan_node.frontend_conjuncts));
+        RETURN_IF_ERROR(VExpr::create_expr_trees(
+            tnode.schema_scan_node.frontend_conjuncts,
+            _frontend_conjunct_ctxs));
     }
     return Status::OK();
 }
@@ -208,6 +210,10 @@ Status SchemaScanOperatorX::prepare(RuntimeState* state) {
 
     _tuple_idx = 0;
 
+    if (!_frontend_conjunct_ctxs.empty()) {
+        RETURN_IF_ERROR(VExpr::prepare(_frontend_conjunct_ctxs, state, _row_descriptor));
+        RETURN_IF_ERROR(VExpr::open(_frontend_conjunct_ctxs, state));
+    }
     return Status::OK();
 }
 
@@ -250,6 +256,13 @@ Status SchemaScanOperatorX::get_block_impl(RuntimeState* state, Block* block, bo
             if (schema_eos) {
                 *eos = true;
                 break;
+            }
+
+            if (!_frontend_conjunct_ctxs.empty()) {
+                RETURN_IF_ERROR(local_state.filter_block(_frontend_conjunct_ctxs, &src_block));
+                if (src_block.rows() == 0) {
+                    continue;
+                }
             }
 
             if (local_state.block_budget().exceeded(src_block.rows(), src_block.bytes())) {

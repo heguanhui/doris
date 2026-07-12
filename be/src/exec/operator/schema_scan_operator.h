@@ -85,6 +85,7 @@ private:
 
     // slot index mapping to src column index
     std::unordered_map<int, int> _slot_offsets;
+    VExprContextSPtrs _frontend_conjunct_ctxs;
 };
 
 } // namespace doris

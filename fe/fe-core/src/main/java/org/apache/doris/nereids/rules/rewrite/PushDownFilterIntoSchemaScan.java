@@ -36,7 +36,6 @@ import org.apache.doris.nereids.trees.plans.logical.LogicalFilter;
 import org.apache.doris.nereids.trees.plans.logical.LogicalSchemaScan;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 
 import java.util.List;
@@ -46,9 +45,6 @@ import java.util.Optional;
  * Used to push down catalog/db/table name to schema scan node.
  */
 public class PushDownFilterIntoSchemaScan extends OneRewriteRuleFactory {
-
-    public static ImmutableSet<String> SUPPOPRT_FRONTEND_CONJUNCTS_TABLES =
-            ImmutableSet.of("view_dependency", "sql_block_rule_status");
 
     @Override
     public Rule build() {
@@ -98,9 +94,6 @@ public class PushDownFilterIntoSchemaScan extends OneRewriteRuleFactory {
 
     private List<Expression> getCommonFilter(LogicalFilter<LogicalSchemaScan> filter) {
         List<Expression> res = Lists.newArrayList();
-        if (!SUPPOPRT_FRONTEND_CONJUNCTS_TABLES.contains(filter.child().getTable().getName().toLowerCase())) {
-            return res;
-        }
         for (Expression expression : filter.getConjuncts()) {
             if (!supportOnFe(expression)) {
                 continue;
