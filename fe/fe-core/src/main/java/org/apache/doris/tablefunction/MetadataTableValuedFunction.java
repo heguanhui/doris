@@ -52,6 +52,12 @@ public abstract class MetadataTableValuedFunction extends TableValuedFunctionIf 
                 return JobsTableValuedFunction.getColumnIndexFromColumnName(columnName, params);
             case TASKS:
                 return TasksTableValuedFunction.getColumnIndexFromColumnName(columnName, params);
+            case TABLES:
+                Integer tablesIndex = MetadataGenerator.TABLES_COLUMN_TO_INDEX.get(columnName.toLowerCase());
+                if (tablesIndex == null) {
+                    throw new AnalysisException("Unknown column name: " + columnName + " for tables metadata table");
+                }
+                return tablesIndex;
             default:
                 throw new AnalysisException("Unknown Metadata TableValuedFunction type");
         }

@@ -131,7 +131,8 @@ enum TFileFormatType {
     FORMAT_TEXT = 17,
     FORMAT_NATIVE = 18,
     FORMAT_LANCE = 19,
-    FORMAT_ES_HTTP = 20
+    FORMAT_ES_HTTP = 20,
+    FORMAT_INFO_SCHEMA_TABLE = 21
 }
 
 // In previous versions, the data compression format and file format were stored together, as TFileFormatType,
@@ -467,6 +468,59 @@ struct TLanceFileDesc {
     3: optional i64 version
 }
 
+// ----- information_schema Table Reader path (FORMAT_INFO_SCHEMA_TABLE) -----
+// Column output mode: DORIS_NATIVE or MYSQL_COMPAT. Column set = f(metadata_type, output_mode),
+// fixed at plan time; the data stage never switches.
+enum TMetadataOutputMode {
+    DORIS_NATIVE = 0,
+    MYSQL_COMPAT = 1,
+}
+
+// Data source type. FE metadata is the first data source; others added later.
+enum TInfoSchemaSourceType {
+    FE_METADATA = 0,
+    // BE-local metadata: each BE generates its own data locally.
+    BE_LOCAL = 1,
+}
+
+// Data source abstraction: describes WHERE the metadata comes from. FE is one implementation.
+struct TInfoSchemaSourceInfo {
+    1: optional TInfoSchemaSourceType source_type
+    2: optional list<Types.TNetworkAddress> fe_addr_list
+    3: optional Types.TUserIdentity current_user_ident
+    4: optional string frontend_conjuncts
+}
+
+// Series-specific filter params for the catalog/db/table series.
+struct TInfoSchemaCatalogDbParams {
+    1: optional string catalog
+    2: optional i64 db_id
+    3: optional string db
+    4: optional string tbl
+    5: optional string wild
+}
+
+// Series-specific param for show-hidden-columns.
+struct TInfoSchemaShowHiddenParams {
+    1: optional bool show_hidden_columns
+}
+
+// Series-specific filter params for BE-local metadata (e.g. backend_tablets).
+// The BE generates data locally; no FE RPC is needed.
+struct TInfoSchemaBeLocalParams {
+    1: optional i64 backend_id
+}
+
+// Unified data source identifier + abstraction + series filters.
+struct TInfoSchemaFileDesc {
+    1: optional Types.TMetadataType metadata_type
+    2: optional TMetadataOutputMode output_mode
+    3: optional TInfoSchemaSourceInfo source_info
+    4: optional TInfoSchemaCatalogDbParams catalog_db_params
+    5: optional TInfoSchemaShowHiddenParams show_hidden_params
+    6: optional TInfoSchemaBeLocalParams be_local_params
+}
+
 struct TTableFormatFileDesc {
     1: optional string table_format_type
     2: optional TIcebergFileDesc iceberg_params
@@ -489,6 +543,7 @@ struct TTableFormatFileDesc {
     //       adbc.<option> passthrough, and either query_sql or partition_b64.
     // The partition descriptor is opaque binary, so it travels base64-encoded.
     14: optional map<string, string> adbc_params
+    15: optional TInfoSchemaFileDesc info_schema_params
 }
 
 // Deprecated, hive text talbe is a special format, not a serde type

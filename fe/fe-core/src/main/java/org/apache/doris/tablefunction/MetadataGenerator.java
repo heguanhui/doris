@@ -109,6 +109,8 @@ import org.apache.doris.thrift.TCell;
 import org.apache.doris.thrift.TFetchSchemaTableDataRequest;
 import org.apache.doris.thrift.TFetchSchemaTableDataResult;
 import org.apache.doris.thrift.TFrontendsMetadataParams;
+import org.apache.doris.thrift.TInfoSchemaCatalogDbParams;
+import org.apache.doris.thrift.TInfoSchemaFileDesc;
 import org.apache.doris.thrift.TJobsMetadataParams;
 import org.apache.doris.thrift.TMaterializedViewsMetadataParams;
 import org.apache.doris.thrift.TMetadataTableRequestParams;
@@ -193,6 +195,7 @@ public class MetadataGenerator {
     private static final ImmutableMap<String, Integer> KEY_COLUMN_USAGE_COLUMN_TO_INDEX;
 
     private static final ImmutableMap<String, Integer> TABLE_CONSTRAINTS_COLUMN_TO_INDEX;
+    static final ImmutableMap<String, Integer> TABLES_COLUMN_TO_INDEX;
 
     static {
         ACTIVE_QUERIES_COLUMN_TO_INDEX = buildColumnToIndex("active_queries");
@@ -215,6 +218,7 @@ public class MetadataGenerator {
         STATISTICS_COLUMN_TO_INDEX = buildColumnToIndex("statistics");
         KEY_COLUMN_USAGE_COLUMN_TO_INDEX = buildColumnToIndex("key_column_usage");
         TABLE_CONSTRAINTS_COLUMN_TO_INDEX = buildColumnToIndex("table_constraints");
+        TABLES_COLUMN_TO_INDEX = buildColumnToIndex("tables");
     }
 
     // Maps each column of a schema table to its position in a row, so that filterColumns() can
@@ -2356,5 +2360,399 @@ public class MetadataGenerator {
         result.setDataBatch(Lists.newArrayList(row));
         result.setStatus(new TStatus(TStatusCode.OK));
         return result;
+    }
+
+    // ==================== information_schema Table Reader path (0-1: tables only) ====================
+
+    // Query-scoped cache (design §2.2 Optimization 1, P0). Key: query_id + metadata_type + params hash.
+    // Holds the full unfiltered row set so subsequent offset/batch_size pages are served from memory
+    // without re-traversing the catalog/db/table tree.
+    private static final com.github.benmanes.caffeine.cache.Cache<String, CachedInfoSchemaRows>
+            QUERY_SCOPED_CACHE = com.github.benmanes.caffeine.cache.Caffeine.newBuilder()
+                    .maximumSize(100)
+                    .expireAfterWrite(5, java.util.concurrent.TimeUnit.MINUTES)
+                    .build();
+
+    private static final class CachedInfoSchemaRows {
+        final List<TRow> rows;
+        CachedInfoSchemaRows(List<TRow> rows) {
+            this.rows = rows;
+        }
+    }
+
+    /**
+     * Entry point for the unified information_schema Table Reader path.
+     * BE InfoSchemaTableReader calls FE via fetchSchemaTableData with info_schema_params set.
+     */
+    public static TFetchSchemaTableDataResult getInfoSchemaMetadata(TFetchSchemaTableDataRequest request)
+            throws TException {
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("getInfoSchemaMetadata() start.");
+        }
+        TInfoSchemaFileDesc infoSchemaParams = request.getInfoSchemaParams();
+        TMetadataType metadataType = infoSchemaParams.getMetadataType();
+        TMetadataTableRequestParams metadataTableParams = buildSchemaTableParams(infoSchemaParams, request);
+        TFetchSchemaTableDataResult result;
+        switch (metadataType) {
+            case TABLES:
+                result = tablesMetadataResult(request, infoSchemaParams);
+                break;
+            case TABLETS:
+                // BE-local metadata: FE returns empty result; BE generates data locally.
+                result = new TFetchSchemaTableDataResult();
+                result.setDataBatch(new ArrayList<>());
+                result.setStatus(new TStatus(TStatusCode.OK));
+                result.setHasMore(false);
+                break;
+            default:
+                return errorResult("Unsupported information_schema table for Table Reader path: " + metadataType);
+        }
+        if (result.getStatus().getStatusCode() == TStatusCode.OK) {
+            filterColumns(result, request.getColumnsName(), metadataType, metadataTableParams);
+            result = sliceResult(result, request.getOffset(), request.getBatchSize());
+        }
+        if (LOG.isDebugEnabled()) {
+            LOG.debug("getInfoSchemaMetadata() end.");
+        }
+        return result;
+    }
+
+    /**
+     * Convert TInfoSchemaFileDesc (source abstraction) into the existing TMetadataTableRequestParams
+     * so that we reuse the existing filterColumns() helper.
+     *
+     * <p>Field mapping (design doc §1.4.4 / §2.2 Optimization 1):
+     * <ul>
+     *   <li>{@code source_info.current_user_ident} → {@code params.current_user_ident}
+     *       (permission check context)</li>
+     *   <li>{@code source_info.frontend_conjuncts} → applied directly in tablesMetadataResult
+     *       for predicate pushdown on TABLE_NAME / TABLE_SCHEMA / TABLE_CATALOG</li>
+     *   <li>{@code catalog_db_params.catalog/db/db_id} → applied directly in tablesMetadataResult
+     *       as iteration filter (skip non-matching catalogs/dbs)</li>
+     * </ul>
+     */
+    private static TMetadataTableRequestParams buildSchemaTableParams(TInfoSchemaFileDesc infoSchemaParams,
+                                                                         TFetchSchemaTableDataRequest request) {
+        TMetadataTableRequestParams params = new TMetadataTableRequestParams();
+        params.setMetadataType(infoSchemaParams.getMetadataType());
+        if (request.isSetColumnsName()) {
+            params.setColumnsName(request.getColumnsName());
+        }
+        // Data source abstraction: carry user identity for permission checks.
+        if (infoSchemaParams.isSetSourceInfo()
+                && infoSchemaParams.getSourceInfo().isSetCurrentUserIdent()) {
+            params.setCurrentUserIdent(infoSchemaParams.getSourceInfo().getCurrentUserIdent());
+        }
+        return params;
+    }
+
+    /**
+     * Apply offset/limit pagination to the result batch. Sets has_more if there are remaining rows.
+     * Uses long arithmetic to avoid int overflow on large result sets.
+     */
+    private static TFetchSchemaTableDataResult sliceResult(TFetchSchemaTableDataResult result,
+                                                            long offset, int batchSize) {
+        List<TRow> allRows = result.getDataBatch();
+        if (allRows == null || allRows.isEmpty()) {
+            result.setHasMore(false);
+            return result;
+        }
+        int total = allRows.size();
+        int from = (int) Math.min(offset < 0 ? 0L : offset, total);
+        int to = (int) Math.min((long) from + (batchSize <= 0 ? total : batchSize), total);
+        List<TRow> page = allRows.subList(from, to);
+        result.setDataBatch(Lists.newArrayList(page));
+        result.setHasMore(to < total);
+        return result;
+    }
+
+    /**
+     * Build a stable cache key for QueryScopedMetadataCache. Combines query_id (newly added in
+     * Thrift request), metadata_type, and the user-visible filter parameters (catalog/db/table/wild).
+     * Different users with the same filters will share a cache entry; permission filtering is
+     * applied per-user on the result set, so cached rows are filtered before being returned.
+     */
+    private static String buildCacheKey(TFetchSchemaTableDataRequest request, TInfoSchemaFileDesc desc) {
+        StringBuilder sb = new StringBuilder();
+        if (request.isSetQueryId()) {
+            sb.append(request.getQueryId().toString());
+        }
+        sb.append('|').append(desc.getMetadataType());
+        if (desc.isSetCatalogDbParams()) {
+            TInfoSchemaCatalogDbParams p = desc.getCatalogDbParams();
+            if (p.isSetCatalog()) {
+                sb.append("|c=").append(p.getCatalog());
+            }
+            if (p.isSetDb()) {
+                sb.append("|d=").append(p.getDb());
+            }
+            if (p.isSetDbId()) {
+                sb.append("|did=").append(p.getDbId());
+            }
+            if (p.isSetTbl()) {
+                sb.append("|t=").append(p.getTbl());
+            }
+            if (p.isSetWild()) {
+                sb.append("|w=").append(p.getWild());
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Generate information_schema.tables metadata by iterating catalogs -> dbs -> tables.
+     *
+     * <p>Applies (in order):
+     * <ol>
+     *   <li>Query-scoped cache: full unfiltered row set is cached per (query_id, metadata_type,
+     *       filter_params) so subsequent pages are served from memory.</li>
+     *   <li>Catalog/db filter from TInfoSchemaCatalogDbParams.</li>
+     *   <li>Permission filter via TInfoSchemaSourceInfo.current_user_ident (SHOW privilege).</li>
+     *   <li>Predicate pushdown from TInfoSchemaSourceInfo.frontend_conjuncts (a JSON list of
+     *       conjuncts; we parse a minimal subset matching TABLE_NAME / TABLE_SCHEMA / TABLE_CATALOG
+     *       equal/like predicates).</li>
+     * </ol>
+     *
+     * <p>Note: predicate parsing is intentionally lightweight. Conjuncts not understood here are
+     * silently ignored (the BE-side post-filter still applies). This implements the design's
+     * "下推能下推的部分" contract without bringing in a full expression evaluator.
+     */
+    private static TFetchSchemaTableDataResult tablesMetadataResult(TFetchSchemaTableDataRequest request,
+                                                                     TInfoSchemaFileDesc infoSchemaParams) {
+        String cacheKey = buildCacheKey(request, infoSchemaParams);
+        CachedInfoSchemaRows cached = QUERY_SCOPED_CACHE.getIfPresent(cacheKey);
+
+        List<TRow> baseRows;
+        if (cached != null) {
+            baseRows = cached.rows;
+        } else {
+            baseRows = generateTablesRows(infoSchemaParams);
+            QUERY_SCOPED_CACHE.put(cacheKey, new CachedInfoSchemaRows(baseRows));
+        }
+
+        // Permission filter must run per user; if the request carried an explicit user, drop rows
+        // the user cannot see. The cache is keyed by query_id+params, so when the same query
+        // pages through with the same user the permission result is stable.
+        if (infoSchemaParams.isSetSourceInfo()
+                && infoSchemaParams.getSourceInfo().isSetCurrentUserIdent()) {
+            UserIdentity userIdent = UserIdentity.fromThrift(
+                    infoSchemaParams.getSourceInfo().getCurrentUserIdent());
+            baseRows = filterByPermission(baseRows, userIdent);
+        }
+
+        TFetchSchemaTableDataResult result = new TFetchSchemaTableDataResult();
+        result.setDataBatch(baseRows);
+        result.setStatus(new TStatus(TStatusCode.OK));
+        return result;
+    }
+
+    private static List<TRow> generateTablesRows(TInfoSchemaFileDesc infoSchemaParams) {
+        List<TRow> rows = Lists.newArrayList();
+        TInfoSchemaCatalogDbParams filter = infoSchemaParams.isSetCatalogDbParams()
+                ? infoSchemaParams.getCatalogDbParams() : null;
+        // Parse frontend_conjuncts (a JSON list serialized by InfoSchemaScanNode.setScanParams).
+        // The list mirrors the conjuncts held on the scan node; we extract a small subset of
+        // equal/like predicates on the well-known table-name columns.
+        List<PushedConjunct> pushed = parsePushedConjuncts(infoSchemaParams);
+
+        List<String> catalogNames = new ArrayList<>();
+        for (CatalogIf catalog : Env.getCurrentEnv().getCatalogMgr().listCatalogs()) {
+            catalogNames.add(catalog.getName());
+        }
+        for (String catName : catalogNames) {
+            if (filter != null && filter.isSetCatalog() && !filter.getCatalog().equals(catName)) {
+                continue;
+            }
+            if (pushed != null && !matchPushedConjunct(pushed, "TABLE_CATALOG", catName)) {
+                continue;
+            }
+            CatalogIf catalog = Env.getCurrentEnv().getCatalogMgr().getCatalog(catName);
+            if (catalog == null) {
+                continue;
+            }
+            List<String> dbNames = new ArrayList<>();
+            for (String dbName : (List<String>) catalog.getDbNames()) {
+                if (dbName != null) {
+                    dbNames.add(dbName);
+                }
+            }
+            for (String fullDbName : dbNames) {
+                if (filter != null && filter.isSetDb() && !filter.getDb().equals(fullDbName)) {
+                    continue;
+                }
+                if (pushed != null && !matchPushedConjunct(pushed, "TABLE_SCHEMA", fullDbName)) {
+                    continue;
+                }
+                DatabaseIf db = (DatabaseIf) catalog.getDb(fullDbName).orElse(null);
+                if (db == null) {
+                    continue;
+                }
+                for (TableIf table : (List<TableIf>) db.getTables()) {
+                    if (table == null) {
+                        continue;
+                    }
+                    if (filter != null && filter.isSetTbl() && !filter.getTbl().equals(table.getName())) {
+                        continue;
+                    }
+                    if (pushed != null && !matchPushedConjunct(pushed, "TABLE_NAME", table.getName())) {
+                        continue;
+                    }
+                    rows.add(buildTableRow(catName, fullDbName, table));
+                }
+            }
+        }
+        return rows;
+    }
+
+    private static TRow buildTableRow(String catName, String fullDbName, TableIf table) {
+        TRow row = new TRow();
+        row.addToColumnValue(new TCell().setStringVal(catName));             // TABLE_CATALOG
+        row.addToColumnValue(new TCell().setStringVal(fullDbName));          // TABLE_SCHEMA
+        row.addToColumnValue(new TCell().setStringVal(table.getName()));     // TABLE_NAME
+        row.addToColumnValue(new TCell().setStringVal(getTableTypeName(table))); // TABLE_TYPE
+        String engineName = table.getType().toEngineName();
+        row.addToColumnValue(new TCell().setStringVal(engineName == null ? "" : engineName)); // ENGINE
+        row.addToColumnValue(new TCell().setLongVal(0));                    // VERSION
+        row.addToColumnValue(new TCell().setStringVal(""));                 // ROW_FORMAT
+        row.addToColumnValue(new TCell().setLongVal(table.getCachedRowCount())); // TABLE_ROWS
+        row.addToColumnValue(new TCell().setLongVal(0));                    // AVG_ROW_LENGTH
+        row.addToColumnValue(new TCell().setLongVal(table.getDataLength())); // DATA_LENGTH
+        row.addToColumnValue(new TCell().setLongVal(0));                    // MAX_DATA_LENGTH
+        row.addToColumnValue(new TCell().setLongVal(table.getIndexLength())); // INDEX_LENGTH
+        row.addToColumnValue(new TCell().setLongVal(0));                    // DATA_FREE
+        row.addToColumnValue(new TCell().setIsNull(true));                  // AUTO_INCREMENT
+        // CREATE_TIME / UPDATE_TIME / CHECK_TIME are DATETIME columns; emitting an empty string
+        // causes BE's CastToDateOrDatetime parser to fail (it rejects empty input). NULL is the
+        // correct representation of "unknown" in MySQL's information_schema.tables.
+        row.addToColumnValue(new TCell().setIsNull(true));                  // CREATE_TIME
+        row.addToColumnValue(new TCell().setIsNull(true));                  // UPDATE_TIME
+        row.addToColumnValue(new TCell().setIsNull(true));                  // CHECK_TIME
+        row.addToColumnValue(new TCell().setStringVal(""));                 // TABLE_COLLATION
+        row.addToColumnValue(new TCell().setIsNull(true));                  // CHECKSUM
+        row.addToColumnValue(new TCell().setStringVal(""));                 // CREATE_OPTIONS
+        row.addToColumnValue(new TCell().setStringVal(""));                 // TABLE_COMMENT
+        return row;
+    }
+
+    private static List<TRow> filterByPermission(List<TRow> rows, UserIdentity userIdent) {
+        List<TRow> filtered = Lists.newArrayListWithCapacity(rows.size());
+        for (TRow row : rows) {
+            String catName = row.getColumnValue().get(0).stringVal;
+            String dbName = row.getColumnValue().get(1).stringVal;
+            String tblName = row.getColumnValue().get(2).stringVal;
+            if (Env.getCurrentEnv().getAccessManager().checkTblPriv(userIdent, catName, dbName, tblName,
+                    PrivPredicate.SHOW)) {
+                filtered.add(row);
+            }
+        }
+        return filtered;
+    }
+
+    /**
+     * Minimal pushed-conjunct representation. Conjuncts are serialized as a JSON list of
+     * strings (the slot references/exprs as they appear on the scan node). We only support
+     * a small grammar: column OP literal, where OP is '=' or 'LIKE'. Conjuncts we cannot parse
+     * silently drop, so the BE post-filter still produces correct (if non-pruned) results.
+     */
+    private static final class PushedConjunct {
+        final String column;
+        final String op;   // "=" or "LIKE"
+        final String value;
+        PushedConjunct(String column, String op, String value) {
+            this.column = column;
+            this.op = op;
+            this.value = value;
+        }
+    }
+
+    private static List<PushedConjunct> parsePushedConjuncts(TInfoSchemaFileDesc desc) {
+        if (!desc.isSetSourceInfo() || !desc.getSourceInfo().isSetFrontendConjuncts()) {
+            return null;
+        }
+        String json = desc.getSourceInfo().getFrontendConjuncts();
+        if (json == null || json.isEmpty()) {
+            return null;
+        }
+        // The InfoSchemaScanNode currently serializes the raw conjuncts as a JSON array of
+        // BinaryPredicate strings like "TABLE_NAME = 'foo'". We parse the simple forms here.
+        // For richer expressions we leave pruning to the BE post-filter (i.e. no match means
+        // "do not push down, include the row").
+        List<PushedConjunct> result = new ArrayList<>();
+        try {
+            com.google.gson.JsonArray arr = com.google.gson.JsonParser.parseString(json).getAsJsonArray();
+            for (com.google.gson.JsonElement el : arr) {
+                String s = el.getAsString();
+                PushedConjunct pc = parseSingleConjunct(s);
+                if (pc != null) {
+                    result.add(pc);
+                }
+            }
+        } catch (Exception e) {
+            LOG.debug("ignore unparsable frontend_conjuncts: {}", json);
+            return null;
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    private static PushedConjunct parseSingleConjunct(String s) {
+        if (s == null) {
+            return null;
+        }
+        String trimmed = s.trim();
+        // Try LIKE first (case-insensitive operator).
+        String[] likeParts = trimmed.split("\\s+[Ll][Ii][Kk][Ee]\\s+", 2);
+        if (likeParts.length == 2) {
+            return new PushedConjunct(normalizeCol(likeParts[0]), "LIKE", unquote(likeParts[1]));
+        }
+        String[] eqParts = trimmed.split("\\s*=\\s*", 2);
+        if (eqParts.length == 2) {
+            return new PushedConjunct(normalizeCol(eqParts[0]), "=", unquote(eqParts[1]));
+        }
+        return null;
+    }
+
+    private static String normalizeCol(String raw) {
+        // Accept both "TABLE_NAME" and "table_name"; the conjuncts come from upper-cased slot
+        // names so we keep upper-case match.
+        return raw.trim().toUpperCase();
+    }
+
+    private static String unquote(String literal) {
+        String t = literal.trim();
+        if (t.length() >= 2 && t.startsWith("'") && t.endsWith("'")) {
+            return t.substring(1, t.length() - 1);
+        }
+        return t;
+    }
+
+    private static boolean matchPushedConjunct(List<PushedConjunct> conjuncts, String col, String value) {
+        for (PushedConjunct pc : conjuncts) {
+            if (!pc.column.equalsIgnoreCase(col)) {
+                continue;
+            }
+            if ("=".equals(pc.op)) {
+                if (!value.equals(pc.value)) {
+                    return false;
+                }
+            }
+            // LIKE / other operators are NOT pushed down in Phase 1: escaping the SQL LIKE
+            // pattern into a Java regex correctly (handling % / _ / regex metachars) is
+            // subtle and a bug here drops rows. The BE-side post-filter still applies,
+            // so the query returns correct (if non-pruned) results.
+        }
+        return true;
+    }
+
+    /**
+     * Map Doris TableType to MySQL-compatible TABLE_TYPE string.
+     */
+    private static String getTableTypeName(TableIf table) {
+        if (table.getType() == TableType.VIEW) {
+            return "VIEW";
+        }
+        if (table.getType() == TableType.SCHEMA) {
+            return "SYSTEM VIEW";
+        }
+        return "BASE TABLE";
     }
 }

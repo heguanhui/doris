@@ -980,11 +980,22 @@ struct TFetchSchemaTableDataRequest {
   2: optional TSchemaTableName schema_table_name
   3: optional TMetadataTableRequestParams metada_table_params // used for tvf
   4: optional TSchemaTableRequestParams schema_table_params // used for request db information_schema's table
+  // ----- information_schema Table Reader path (FORMAT_INFO_SCHEMA_TABLE) -----
+  5: optional PlanNodes.TInfoSchemaFileDesc info_schema_params
+  6: optional i64 offset
+  7: optional i32 batch_size
+  8: optional Types.TUniqueId thread_id
+  9: optional string time_zone
+  10: optional list<string> columns_name
+  // query_id is the cache key component for QueryScopedMetadataCache (design §2.2 Optimization 1).
+  // Optional: when not set, the cache falls back to (metadata_type, filter_params) only.
+  11: optional Types.TUniqueId query_id
 }
 
 struct TFetchSchemaTableDataResult {
   1: required Status.TStatus status
   2: optional list<Data.TRow> data_batch;
+  3: optional bool has_more
 }
 
 struct TMySqlLoadAcquireTokenResult {

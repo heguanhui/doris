@@ -56,6 +56,8 @@ import org.apache.doris.datasource.connector.converter.ConnectorColumnConverter;
 import org.apache.doris.datasource.doris.RemoteDorisExternalTable;
 import org.apache.doris.datasource.doris.RemoteOlapTable;
 import org.apache.doris.datasource.doris.source.RemoteDorisScanNode;
+import org.apache.doris.datasource.infoschema.ExternalInfoSchemaTable;
+import org.apache.doris.planner.InfoSchemaScanNode;
 import org.apache.doris.datasource.plugin.PluginDrivenExternalCatalog;
 import org.apache.doris.datasource.plugin.PluginDrivenExternalTable;
 import org.apache.doris.datasource.plugin.PluginDrivenMetadata;
@@ -836,6 +838,23 @@ public class PhysicalPlanTranslator extends DefaultPlanVisitor<PlanFragment, Pla
         } else if (table instanceof RemoteDorisExternalTable) {
             scanNode = new RemoteDorisScanNode(context.nextPlanNodeId(), tupleDescriptor, false, sv,
                     context.getScanContext());
+        } else if (table instanceof ExternalInfoSchemaTable) {
+            // information_schema treated as a table format: data source is FE metadata.
+            // MYSQL_COMPAT keeps the existing MySQL-compatible column set (Phase 1 default).
+            // BindRelation gates this path: only `information_schema.tables` with
+            // enable_info_schema_table_reader=true reaches here. Any other ExternalInfoSchemaTable
+            // instance reaching this branch indicates a plan-cache or routing regression.
+            if (!ExternalInfoSchemaTable.isTableReaderSupported(table.getName())) {
+                throw new RuntimeException(
+                        "information_schema." + table.getName() + " is not wired on the Table Reader "
+                                + "path; BindRelation should have routed it to the legacy path");
+            }
+            ExternalInfoSchemaTable infoSchemaTable = (ExternalInfoSchemaTable) table;
+            scanNode = new InfoSchemaScanNode(context.nextPlanNodeId(), tupleDescriptor, false, sv,
+                    context.getScanContext(),
+                    infoSchemaTable.getInfoSchemaDesc(
+                            ExternalInfoSchemaTable.getMetadataType(table.getName()),
+                            org.apache.doris.thrift.TMetadataOutputMode.MYSQL_COMPAT));
         } else {
             throw new RuntimeException("do not support table type " + table.getType());
         }

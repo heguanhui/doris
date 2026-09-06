@@ -770,6 +770,11 @@ enum TMetadataType {
   // Also assigned on branch-4.1 for Lance physical index entries inspection.
   // Keep the value aligned across maintained branches. Do not renumber.
   LANCE_INDEX_ENTRIES = 15,
+  TABLES = 16,
+  COLUMNS = 17,
+  SCHEMATA = 18,
+  // BE-local metadata: each BE generates its own data (e.g. backend_tablets).
+  TABLETS = 19,
 }
 
 // deprecated

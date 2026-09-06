@@ -81,6 +81,7 @@
 #include "format/table/partition_column_filler.h"
 #include "format/table/remote_doris_reader.h"
 #include "format/table/transactional_hive_reader.h"
+#include "format/table/info_schema_table_reader.h"
 #include "format/table/trino_connector_jni_reader.h"
 #include "format/text/text_reader.h"
 #include "io/cache/block_file_cache_profile.h"
@@ -257,6 +258,7 @@ bool FileScanner::_should_enable_adaptive_batch_size(TFileFormatType::type forma
     case TFileFormatType::FORMAT_TEXT:
     case TFileFormatType::FORMAT_JSON:
     case TFileFormatType::FORMAT_JNI:
+    case TFileFormatType::FORMAT_INFO_SCHEMA_TABLE:
         return true;
     default:
         return false;
@@ -1261,6 +1263,15 @@ Status FileScanner::_get_next_reader() {
             _cur_reader = EsHttpReader::create_unique(_file_slot_descs, _state, _profile, range,
                                                       *_params, _real_tuple_desc);
             init_status = static_cast<EsHttpReader*>(_cur_reader.get())->init_reader();
+            break;
+        }
+        case TFileFormatType::FORMAT_INFO_SCHEMA_TABLE: {
+            ReaderInitContext ctx;
+            _fill_base_init_context(&ctx);
+            auto reader = InfoSchemaTableReader::create_unique(
+                    _file_slot_descs, _state, range);
+            init_status = static_cast<GenericReader*>(reader.get())->init_reader(&ctx);
+            _cur_reader = std::move(reader);
             break;
         }
         default:

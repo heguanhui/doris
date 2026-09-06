@@ -352,6 +352,11 @@ public class SessionVariable implements Serializable, Writable {
 
     public static final String ENABLE_PIPELINE_X_ENGINE = "enable_pipeline_x_engine";
 
+    // information_schema Table Reader path (design §1.7 — "session variable回退").
+    // Default false so that the new path is opt-in during rollout. After Phase 1 stabilises,
+    // flip the default to true and remove this variable.
+    public static final String ENABLE_INFO_SCHEMA_TABLE_READER = "enable_info_schema_table_reader";
+
     public static final String ENABLE_SHARED_SCAN = "enable_shared_scan";
 
     public static final String ENABLE_LEFT_SEMI_DIRECT_RETURN_OPT = "enable_left_semi_direct_return_opt";
@@ -1663,6 +1668,16 @@ public class SessionVariable implements Serializable, Writable {
     @VarAttrDef.VarAttr(name = ENABLE_PIPELINE_X_ENGINE, fuzzy = false, varType = VariableAnnotation.REMOVED,
             setter = "setEnablePipelineXEngine")
     private boolean enablePipelineXEngine = true;
+
+    @VarAttrDef.VarAttr(name = ENABLE_INFO_SCHEMA_TABLE_READER,
+            fuzzy = true,
+            varType = VariableAnnotation.EXPERIMENTAL,
+            needForward = true,
+            description = "Whether to route information_schema system tables through the unified "
+                    + "Table Reader path (InfoSchemaScanNode + InfoSchemaTableReader) instead of "
+                    + "the legacy SchemaScanNode + 41 SchemaXxxScanners. Default false for safe "
+                    + "rollout; flip to true to opt in.")
+    private boolean enableInfoSchemaTableReader = false;
 
     @VarAttrDef.VarAttr(name = ENABLE_SHARED_SCAN, fuzzy = false, varType = VariableAnnotation.EXPERIMENTAL,
             needForward = true)
@@ -6062,6 +6077,14 @@ public class SessionVariable implements Serializable, Writable {
 
     public void setEnableSharedScan(boolean value) {
         enableSharedScan = value;
+    }
+
+    public boolean isEnableInfoSchemaTableReader() {
+        return enableInfoSchemaTableReader;
+    }
+
+    public void setEnableInfoSchemaTableReader(boolean value) {
+        enableInfoSchemaTableReader = value;
     }
 
     public boolean getEnableParallelScan() {

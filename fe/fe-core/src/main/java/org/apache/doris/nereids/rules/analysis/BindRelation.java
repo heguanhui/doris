@@ -23,6 +23,7 @@ import org.apache.doris.binlog.BinlogUtils;
 import org.apache.doris.catalog.AggStateType;
 import org.apache.doris.catalog.AggregateType;
 import org.apache.doris.catalog.Column;
+import org.apache.doris.catalog.DatabaseIf;
 import org.apache.doris.catalog.DistributionInfo;
 import org.apache.doris.catalog.Env;
 import org.apache.doris.catalog.FunctionRegistry;
@@ -31,6 +32,7 @@ import org.apache.doris.catalog.OlapTable;
 import org.apache.doris.catalog.Partition;
 import org.apache.doris.catalog.RowBinlogTableWrapper;
 import org.apache.doris.catalog.SchemaTable;
+import org.apache.doris.datasource.infoschema.ExternalInfoSchemaTable;
 import org.apache.doris.catalog.SchemaTable.SchemaColumn;
 import org.apache.doris.catalog.TableIf;
 import org.apache.doris.catalog.Type;
@@ -44,6 +46,7 @@ import org.apache.doris.common.Config;
 import org.apache.doris.common.IdGenerator;
 import org.apache.doris.common.Pair;
 import org.apache.doris.common.util.Util;
+import org.apache.doris.datasource.CatalogIf;
 import org.apache.doris.datasource.ExternalTable;
 import org.apache.doris.datasource.ExternalView;
 import org.apache.doris.datasource.doris.RemoteDorisExternalTable;
@@ -830,6 +833,30 @@ public class BindRelation extends OneAnalysisRuleFactory {
                             unboundRelation.getTableSnapshot(),
                             Optional.ofNullable(unboundRelation.getScanParams()), Optional.empty());
                 case SCHEMA:
+                    // information_schema Table Reader path (design §1.1 / §1.7).
+                    // The session variable ENABLE_INFO_SCHEMA_TABLE_READER (default false)
+                    // controls the rollout: when on, supported schema tables use the new
+                    // Table Reader path via InfoSchemaScanNode; otherwise legacy SchemaScan.
+                    if (table instanceof SchemaTable
+                            && ExternalInfoSchemaTable.isTableReaderSupported(table.getName())
+                            && cascadesContext.getConnectContext() != null
+                            && cascadesContext.getConnectContext().getSessionVariable() != null
+                            && cascadesContext.getConnectContext().getSessionVariable()
+                                    .isEnableInfoSchemaTableReader()) {
+                        // Create ExternalInfoSchemaTable with catalog/database from SQL parsing.
+                        // This is the unified table abstraction per the design: information_schema
+                        // tables are treated as external tables regardless of internal/external catalog.
+                        CatalogIf<?> catalog = cascadesContext.getConnectContext().getEnv()
+                                .getCatalogMgr().getCatalog(qualifiedTableName.get(0));
+                        DatabaseIf<?> db = catalog.getDbNullable(qualifiedTableName.get(1));
+                        ExternalInfoSchemaTable infoSchemaTable = new ExternalInfoSchemaTable(
+                                table.getId(), table.getName(), catalog, db);
+                        return new LogicalFileScan(unboundRelation.getRelationId(), infoSchemaTable,
+                                qualifierWithoutTableName, ImmutableList.of(),
+                                unboundRelation.getTableSample(),
+                                unboundRelation.getTableSnapshot(),
+                                Optional.ofNullable(unboundRelation.getScanParams()), Optional.empty());
+                    }
                     LogicalSchemaScan schemaScan = new LogicalSchemaScan(unboundRelation.getRelationId(), table,
                             qualifierWithoutTableName);
                     LogicalSubQueryAlias<LogicalSchemaScan> subQueryAlias = new LogicalSubQueryAlias<>(

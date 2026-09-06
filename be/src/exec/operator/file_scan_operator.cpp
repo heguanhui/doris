@@ -153,6 +153,12 @@ bool FileScanLocalState::_should_use_file_scanner_v2(const TQueryOptions& query_
         scan_params.table_format_params.table_format_type == "adbc") {
         return true;
     }
+    // InfoSchema tables use the legacy FileScanner with the custom InfoSchemaTableReader.
+    // FileScannerV2 uses the new format::TableReader interface, which is not yet implemented
+    // for info_schema tables.
+    if (!is_load && scan_params.format_type == TFileFormatType::FORMAT_INFO_SCHEMA_TABLE) {
+        return false;
+    }
     const bool is_transactional_hive =
             scan_params.__isset.table_format_params &&
             scan_params.table_format_params.table_format_type == "transactional_hive";
