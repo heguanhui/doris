@@ -246,7 +246,36 @@ TFetchSchemaTableDataRequest InfoSchemaTableReader::_build_request() const {
         columns_name.emplace_back(slot->col_name());
     }
     request.__set_columns_name(std::move(columns_name));
+    // Forward-to-master: tables whose data resides only on the master FE
+    // (partitions, tables, columns, etc.) set this flag so the receiving FE
+    // can forward the request if it is not the master. Multi-FE aggregation
+    // tables (backends, frontends) set false so any FE can serve directly.
+    request.__set_forward_to_master(_needs_master_fe());
     return request;
+}
+
+bool InfoSchemaTableReader::_needs_master_fe() const {
+    switch (_info_schema_desc.metadata_type) {
+        // Multi-FE aggregation tables: any FE can serve
+        case TMetadataType::BACKENDS:
+        case TMetadataType::FRONTENDS:
+        case TMetadataType::CATALOGS:
+        case TMetadataType::FRONTENDS_DISKS:
+            return false;
+        // Single-master tables: must be served by master FE
+        case TMetadataType::PARTITIONS:
+        case TMetadataType::TABLES:
+        case TMetadataType::COLUMNS:
+        case TMetadataType::SCHEMATA:
+        case TMetadataType::MATERIALIZED_VIEWS:
+        case TMetadataType::JOBS:
+        case TMetadataType::TASKS:
+        case TMetadataType::WORKLOAD_SCHED_POLICY:
+        case TMetadataType::STREAMS:
+            return true;
+        default:
+            return true;
+    }
 }
 
 Status InfoSchemaTableReader::_do_get_next_block(Block* block, size_t* read_rows, bool* eof) {

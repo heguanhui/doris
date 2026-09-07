@@ -3377,6 +3377,13 @@ public class FrontendServiceImpl implements FrontendService.Iface {
     @Override
     public TFetchSchemaTableDataResult fetchSchemaTableData(TFetchSchemaTableDataRequest request) throws TException {
         try {
+            // Forward-to-master: if the request requires master FE and this FE is not
+            // the master, forward the request to the master FE.
+            if (request.isSetForwardToMaster() && request.isForwardToMaster()
+                    && !Env.getCurrentEnv().isMaster()) {
+                return forwardFetchSchemaTableDataToMaster(request);
+            }
+
             // Dispatch order matches the design pseudocode (design doc §1.4 RPC layer):
             //   1. TVF (METADATA_TABLE)
             //   2. information_schema Table Reader (info_schema_params)
@@ -3395,6 +3402,40 @@ public class FrontendServiceImpl implements FrontendService.Iface {
         } catch (Exception e) {
             LOG.warn("Failed to fetchSchemaTableData", e);
             return MetadataGenerator.errorResult(e.getMessage());
+        }
+    }
+
+    private TFetchSchemaTableDataResult forwardFetchSchemaTableDataToMaster(
+            TFetchSchemaTableDataRequest request) throws TException {
+        // Get master FE address
+        String masterHost = Env.getCurrentEnv().getMasterHost();
+        int masterRpcPort = Env.getCurrentEnv().getMasterRpcPort();
+        if (masterHost == null || masterRpcPort <= 0) {
+            return MetadataGenerator.errorResult("Master FE not available");
+        }
+        TNetworkAddress masterAddr = new TNetworkAddress(masterHost, masterRpcPort);
+
+        // Forward the request to master FE via Thrift RPC
+        FrontendService.Client client = null;
+        boolean returnObj = false;
+        try {
+            client = ClientPool.frontendPool.borrowObject(masterAddr,
+                    Config.thrift_client_timeout_ms);
+            TFetchSchemaTableDataResult result = client.fetchSchemaTableData(request);
+            returnObj = true;
+            return result;
+        } catch (Exception e) {
+            LOG.warn("Failed to forward fetchSchemaTableData to master {}", masterAddr, e);
+            return MetadataGenerator.errorResult(
+                    "Failed to forward to master FE: " + e.getMessage());
+        } finally {
+            if (client != null) {
+                if (returnObj) {
+                    ClientPool.frontendPool.returnObject(masterAddr, client);
+                } else {
+                    ClientPool.frontendPool.invalidateObject(masterAddr, client);
+                }
+            }
         }
     }
 

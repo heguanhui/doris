@@ -85,6 +85,11 @@ private:
     // projection which are RPC-layer-only fields.
     TFetchSchemaTableDataRequest _build_request() const;
 
+    // Returns true if the metadata type requires the master FE to serve the request
+    // (single-master tables like partitions, tables, columns). Returns false for
+    // multi-FE aggregation tables (backends, frontends) where any FE can serve.
+    bool _needs_master_fe() const;
+
     const std::vector<SlotDescriptor*>& _file_slot_descs;
     RuntimeState* _state = nullptr;
 

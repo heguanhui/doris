@@ -990,6 +990,11 @@ struct TFetchSchemaTableDataRequest {
   // query_id is the cache key component for QueryScopedMetadataCache (design §2.2 Optimization 1).
   // Optional: when not set, the cache falls back to (metadata_type, filter_params) only.
   11: optional Types.TUniqueId query_id
+  // When true, the receiving FE should forward the request to the master FE
+  // if it is not the master itself. Used for tables whose data resides only on
+  // the master (e.g. partitions, tables, columns). Multi-FE aggregation tables
+  // (backends, frontends) set this to false so any FE can serve the request.
+  12: optional bool forward_to_master
 }
 
 struct TFetchSchemaTableDataResult {
